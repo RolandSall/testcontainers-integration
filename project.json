@@ -1,0 +1,7 @@
+{
+  "name": "container-integration-testing",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "tools/container-integration-testing/src",
+  "projectType": "library",
+  "tags": ["type:adapter", "context:shared", "platform:node"]
+}

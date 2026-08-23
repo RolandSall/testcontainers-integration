@@ -1,0 +1,47 @@
+{
+  "name": "container-integration-testing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "engines": { "node": ">=22.22" },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./container-resource-map": {
+      "types": "./dist/container-resource-map.d.ts",
+      "import": "./dist/container-resource-map.js"
+    },
+    "./vitest": {
+      "types": "./dist/vitest/index.d.ts",
+      "import": "./dist/vitest/index.js"
+    },
+    "./jest": {
+      "types": "./dist/jest/index.d.ts",
+      "import": "./dist/jest/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "bun scripts/clean-dist.ts && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@testcontainers/mssqlserver": "12.1.0",
+    "testcontainers": "12.1.0",
+    "typescript": ">=5.5 <7"
+  },
+  "peerDependencies": {
+    "jest": ">=30 <31",
+    "vitest": ">=4 <5"
+  },
+  "peerDependenciesMeta": {
+    "jest": { "optional": true },
+    "vitest": { "optional": true }
+  }
+}
