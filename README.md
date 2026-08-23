@@ -77,6 +77,10 @@ sequenceDiagram
 ```
 
 The global runtime starts before worker test files and is shared for the complete command.
+An optional `prepareResources` callback runs once after all containers start and before their
+serializable descriptors are provided to workers. A preparation failure stops containers and
+the shared network immediately. This is the hook for schema migration without starting an
+application.
 The application starts only for an annotated file and stops when that file finishes.
 
 ## Vitest with annotations
@@ -163,7 +167,7 @@ import { apiIntegrationTestContext } from './api-application.vitest.setup.js';
 
 @RequiredContainer(Container.SqlServer)
 @ApplicationIntegrationTest
-export class CandidateApiIntegrationTest {}
+export class AccountApiIntegrationTest {}
 
 test(
   'given the API is running, when health is requested, then the application responds successfully',
@@ -282,7 +286,7 @@ import { apiIntegrationTestContext } from './api-application.jest.setup.js';
 
 @RequiredContainer(Container.SqlServer)
 @ApplicationIntegrationTest
-export class CandidateApiIntegrationTest {}
+export class AccountApiIntegrationTest {}
 
 test(
   'given the API is running, when health is requested, then the application responds successfully',

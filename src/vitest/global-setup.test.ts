@@ -44,13 +44,14 @@ class FakeContainerNetwork implements ContainerNetwork {
 }
 
 test(
-  'given decorated test files, when Vitest global setup runs, then one container resource is provided and stopped once',
+  'given decorated test files, when Vitest global setup runs, then resources are prepared before they are provided and stopped once',
   async () => {
     const root = await mkdtemp(join(tmpdir(), 'container-global-setup-'));
     const container = new FakeSqlServerContainer();
     const network = new FakeContainerNetwork();
     let providedKey: string | undefined;
     let providedValue: unknown;
+    const events: string[] = [];
     try {
       await writeFile(
         join(root, 'candidate.container.integration.test.ts'),
@@ -63,10 +64,15 @@ test(
           () => container,
         ),
         networkFactory: () => Promise.resolve(network),
+        prepareResources: (resources) => {
+          events.push(`prepared ${resources.get(Container.SqlServer).database}`);
+          return Promise.resolve();
+        },
       });
 
       await lifecycle.setup({
         provide: (key, value) => {
+          events.push('provided');
           providedKey = key;
           providedValue = value;
         },
@@ -85,6 +91,47 @@ test(
         },
       });
       expect(container.startCount).toBe(1);
+      expect(container.stopCount).toBe(1);
+      expect(network.stopCount).toBe(1);
+      expect(events).toEqual(['prepared master', 'provided']);
+    } finally {
+      await rm(root, { recursive: true });
+    }
+  },
+);
+
+test(
+  'given resource preparation fails, when Vitest global setup runs, then containers are stopped and nothing is provided',
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), 'container-global-setup-failure-'));
+    const container = new FakeSqlServerContainer();
+    const network = new FakeContainerNetwork();
+    let provideCount = 0;
+    try {
+      await writeFile(
+        join(root, 'candidate.container.integration.test.ts'),
+        '@RequiredContainer(Container.SqlServer) class CandidateIntegrationTest {}',
+      );
+      const failure = new Error('migration failed');
+      const lifecycle = createVitestContainerGlobalSetup({
+        root,
+        registry: new ContainerRegistry().register(
+          Container.SqlServer,
+          () => container,
+        ),
+        networkFactory: () => Promise.resolve(network),
+        prepareResources: () => Promise.reject(failure),
+      });
+
+      await expect(
+        lifecycle.setup({
+          provide: () => {
+            provideCount += 1;
+          },
+        }),
+      ).rejects.toBe(failure);
+
+      expect(provideCount).toBe(0);
       expect(container.stopCount).toBe(1);
       expect(network.stopCount).toBe(1);
     } finally {
