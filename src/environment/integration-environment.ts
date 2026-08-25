@@ -52,6 +52,11 @@ export class IntegrationEnvironment<TApplication> {
       const resources = await this.options.containers.start(
         this.options.requiredContainers,
       );
+      if (this.options.prepareResources !== undefined) {
+        this.logger.info('application', 'preparing container resources');
+        await this.options.prepareResources(resources);
+        this.logger.info('application', 'container resources are ready');
+      }
       this.logger.info('application', 'starting application');
       const application = await this.options.application.start(resources);
       this.logger.info('application', 'application is ready');

@@ -42,6 +42,10 @@ test(
     const environment = new IntegrationEnvironment({
       requiredContainers: [Container.SqlServer],
       containers,
+      prepareResources: () => {
+        events.push('resources prepared');
+        return Promise.resolve();
+      },
       application,
     });
 
@@ -51,9 +55,53 @@ test(
     expect(context.application).toEqual({ listening: true });
     expect(events).toEqual([
       'container started',
+      'resources prepared',
       'application started',
       'application stopped',
       'container stopped',
+    ]);
+  },
+);
+
+test(
+  'given resource preparation fails, when the environment starts, then the application stays stopped and containers are released',
+  async () => {
+    const events: string[] = [];
+    const containers: ContainerSource = {
+      start: () => {
+        events.push('containers started');
+        return Promise.resolve(new ContainerResources([]));
+      },
+      stop: () => {
+        events.push('containers stopped');
+        return Promise.resolve();
+      },
+    };
+    const environment = new IntegrationEnvironment({
+      requiredContainers: [],
+      containers,
+      prepareResources: () => {
+        events.push('resources failed');
+        return Promise.reject(new Error('resources could not be prepared'));
+      },
+      application: {
+        start: () => {
+          events.push('application started');
+          return Promise.resolve({ listening: true as const });
+        },
+        stop: () => Promise.resolve(),
+      },
+    });
+
+    await expect(environment.start()).rejects.toThrow(
+      'resources could not be prepared',
+    );
+    await environment.stop();
+
+    expect(events).toEqual([
+      'containers started',
+      'resources failed',
+      'containers stopped',
     ]);
   },
 );
