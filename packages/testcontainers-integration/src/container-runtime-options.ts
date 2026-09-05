@@ -7,4 +7,6 @@ export interface ContainerRuntimeOptions {
   readonly networkFactory?: ContainerNetworkFactory;
   /** Receives runtime events. Defaults to the timestamped console logger. */
   readonly logger?: IntegrationTestLogger;
+  /** Streams raw container output. Disabled by default to keep test output concise. */
+  readonly containerLogs?: boolean;
 }

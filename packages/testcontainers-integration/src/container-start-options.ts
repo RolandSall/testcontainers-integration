@@ -9,4 +9,6 @@ export interface ContainerStartOptions {
   readonly networkAliases?: readonly string[];
   /** Logger that receives lifecycle and container-output events. */
   readonly logger?: IntegrationTestLogger;
+  /** Streams raw container stdout and stderr through the logger when enabled. */
+  readonly containerLogs?: boolean;
 }

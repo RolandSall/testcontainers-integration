@@ -120,6 +120,7 @@ describe('ContainerRuntime', () => {
           return Promise.resolve(network);
         },
         logger,
+        containerLogs: true,
       });
 
       const [first, second] = await Promise.all([
@@ -138,6 +139,7 @@ describe('ContainerRuntime', () => {
         network,
         networkAliases: ['postgres'],
         logger,
+        containerLogs: true,
       });
       expect(network.stopCount).toBe(1);
       expect(events).toEqual([

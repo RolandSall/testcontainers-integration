@@ -44,7 +44,7 @@ export class RabbitMqTestContainer implements TestContainer<RabbitMqResource> {
   private async startOnce(options: ContainerStartOptions): Promise<RabbitMqResource> {
     const image = this.options.image ?? DEFAULT_IMAGE;
     let container = new RabbitMQContainer(image).withStartupTimeout(this.options.startupTimeoutMs ?? 120_000);
-    if (options.logger !== undefined) container = container.withLogConsumer(createContainerLogConsumer(this.kind, options.logger));
+    if (options.containerLogs === true && options.logger !== undefined) container = container.withLogConsumer(createContainerLogConsumer(this.kind, options.logger));
     if (options.network !== undefined) container = container.withNetwork(options.network.native as StartedNetwork);
     if (options.networkAliases !== undefined) container = container.withNetworkAliases(...options.networkAliases);
     options.logger?.info(`container:${this.kind}`, `preparing image ${image}`);

@@ -57,7 +57,7 @@ export class PostgreSqlTestContainer implements TestContainer<PostgreSqlResource
     if (this.options.database !== undefined) container = container.withDatabase(this.options.database);
     if (this.options.username !== undefined) container = container.withUsername(this.options.username);
     if (this.options.password !== undefined) container = container.withPassword(this.options.password);
-    if (options.logger !== undefined) {
+    if (options.containerLogs === true && options.logger !== undefined) {
       container = container.withLogConsumer(createContainerLogConsumer(this.kind, options.logger));
     }
     if (options.network !== undefined) {

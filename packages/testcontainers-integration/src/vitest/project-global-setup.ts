@@ -29,6 +29,9 @@ export const setup = async (project: ConfiguredVitestProject): Promise<void> => 
     root: project.config.root,
     registry: createContainerProjectRegistry(containerProject),
     requiredContainerInstances: containerProjectInstances(containerProject),
+    ...(containerProject.containerLogs === undefined
+      ? {}
+      : { containerLogs: containerProject.containerLogs }),
     prepareResources: (resources) => {
       const restoreEnvironment = installProcessEnvironment(
         resolveContainerProjectEnvironment(containerProject, resources),

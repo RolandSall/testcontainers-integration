@@ -30,6 +30,9 @@ export const createConfiguredJestLifecycle = (
     root: projectConfig.rootDir,
     registry: createContainerProjectRegistry(containerProject),
     requiredContainerInstances: containerProjectInstances(containerProject),
+    ...(containerProject.containerLogs === undefined
+      ? {}
+      : { containerLogs: containerProject.containerLogs }),
     prepareResources: (resources) => {
       const restoreEnvironment = installProcessEnvironment(
         resolveContainerProjectEnvironment(containerProject, resources),

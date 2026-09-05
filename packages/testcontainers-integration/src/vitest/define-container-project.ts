@@ -15,6 +15,8 @@ export interface VitestContainerProjectOptions<
   readonly application?: string | ContainerProjectApplication<TContainers>;
   readonly hookTimeout?: number;
   readonly testTimeout?: number;
+  /** Streams raw container output. Disabled by default. */
+  readonly containerLogs?: boolean;
 }
 
 /**
@@ -44,6 +46,7 @@ export const defineContainerProject = <
       [CONTAINER_PROJECT_CONTEXT_KEY]: serializeContainerProject(
         options.containers,
         environment,
+        options.containerLogs,
       ),
     },
   },

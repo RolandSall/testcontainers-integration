@@ -34,6 +34,7 @@ export class ContainerRuntime {
   private readonly startedOrder: string[] = [];
   private readonly networkFactory: ContainerNetworkFactory;
   private readonly logger: IntegrationTestLogger;
+  private readonly containerLogs: boolean;
   private network: ContainerNetwork | undefined;
   private networkPromise: Promise<ContainerNetwork> | undefined;
   private stopPromise: Promise<void> | undefined;
@@ -45,6 +46,7 @@ export class ContainerRuntime {
   ) {
     this.networkFactory = options.networkFactory ?? startTestcontainersNetwork;
     this.logger = options.logger ?? consoleIntegrationTestLogger;
+    this.containerLogs = options.containerLogs ?? false;
   }
 
   /**
@@ -144,7 +146,12 @@ export class ContainerRuntime {
       : `${instance.name} (${instance.kind})`;
     this.logger.info('runtime', `starting ${label} container`);
     const resource = container
-      .start({ network, networkAliases: [instance.name], logger: this.logger })
+      .start({
+        network,
+        networkAliases: [instance.name],
+        logger: this.logger,
+        ...(this.containerLogs ? { containerLogs: true } : {}),
+      })
       .then((startedResource) => {
         this.startedOrder.push(instance.name);
         this.logger.info('runtime', `${label} container is ready`);

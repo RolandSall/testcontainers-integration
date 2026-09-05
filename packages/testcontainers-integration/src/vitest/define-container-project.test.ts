@@ -14,6 +14,7 @@ test('given concise Vitest options, when a project is defined, then library life
         RABBITMQ_URL: fromContainer('messages', 'amqpUrl'),
       },
     },
+    containerLogs: true,
   });
 
   expect(config.test?.globalSetup).toEqual([
@@ -38,6 +39,7 @@ test('given concise Vitest options, when a project is defined, then library life
         property: 'amqpUrl',
       },
     },
+    containerLogs: true,
   });
 });
 

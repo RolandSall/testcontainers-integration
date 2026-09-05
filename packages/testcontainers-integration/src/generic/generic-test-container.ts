@@ -70,7 +70,7 @@ export class GenericTestContainer<
     if (ports.length > 0) container = container.withExposedPorts(...ports);
     if (this.options.environment !== undefined) container = container.withEnvironment(this.options.environment);
     if (this.options.command !== undefined) container = container.withCommand([...this.options.command]);
-    if (options.logger !== undefined) container = container.withLogConsumer(createContainerLogConsumer(this.kind, options.logger));
+    if (options.containerLogs === true && options.logger !== undefined) container = container.withLogConsumer(createContainerLogConsumer(this.kind, options.logger));
     if (options.network !== undefined) container = container.withNetwork(options.network.native as StartedNetwork);
     if (options.networkAliases !== undefined) container = container.withNetworkAliases(...options.networkAliases);
     if (this.options.configure !== undefined) container = this.options.configure(container);

@@ -48,7 +48,7 @@ export class MongoDbTestContainer implements TestContainer<MongoDbResource> {
     let container = new MongoDBContainer(image).withStartupTimeout(this.options.startupTimeoutMs ?? 120_000);
     if (this.options.username !== undefined) container = container.withUsername(this.options.username);
     if (this.options.password !== undefined) container = container.withPassword(this.options.password);
-    if (options.logger !== undefined) container = container.withLogConsumer(createContainerLogConsumer(this.kind, options.logger));
+    if (options.containerLogs === true && options.logger !== undefined) container = container.withLogConsumer(createContainerLogConsumer(this.kind, options.logger));
     if (options.network !== undefined) container = container.withNetwork(options.network.native as StartedNetwork);
     if (options.networkAliases !== undefined) container = container.withNetworkAliases(...options.networkAliases);
     options.logger?.info(`container:${this.kind}`, `preparing image ${image}`);
@@ -59,7 +59,7 @@ export class MongoDbTestContainer implements TestContainer<MongoDbResource> {
         kind: this.kind,
         host: started.getHost(),
         port: started.getMappedPort(27017),
-        connectionString: started.getConnectionString(),
+        connectionString: withDirectConnection(started.getConnectionString()),
       };
       options.logger?.info(`container:${this.kind}`, `accepting connections on ${resource.host}:${resource.port}`);
       return resource;
@@ -69,3 +69,8 @@ export class MongoDbTestContainer implements TestContainer<MongoDbResource> {
     }
   }
 }
+
+const withDirectConnection = (connectionString: string): string => {
+  const separator = connectionString.includes('?') ? '&' : '?';
+  return `${connectionString}${separator}directConnection=true`;
+};

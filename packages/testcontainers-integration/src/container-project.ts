@@ -78,6 +78,7 @@ export interface SerializedContainerProject {
     options: Readonly<Record<string, string | number>>;
   }>[];
   readonly environment?: Readonly<Record<string, ContainerEnvironmentReference>>;
+  readonly containerLogs?: boolean;
 }
 
 /** Declares a PostgreSQL container for explicit project configuration. */
@@ -117,13 +118,19 @@ export const serializeContainerProject = <
 >(
   containers: TContainers,
   environment?: ContainerProjectEnvironment<TContainers>,
+  containerLogs?: boolean,
 ): SerializedContainerProject => {
   const definitions = Object.entries(containers).map(([name, definition]) => ({
     name,
     kind: definition.kind,
     options: definition.options,
   }));
-  return parseContainerProject({ version: 1, containers: definitions, environment });
+  return parseContainerProject({
+    version: 1,
+    containers: definitions,
+    environment,
+    containerLogs,
+  });
 };
 
 export const parseContainerProject = (value: unknown): SerializedContainerProject => {
@@ -153,10 +160,14 @@ export const parseContainerProject = (value: unknown): SerializedContainerProjec
     };
   });
   const environment = parseContainerEnvironment(value.environment, containers);
+  if (value.containerLogs !== undefined && typeof value.containerLogs !== 'boolean') {
+    throw new Error('Container project containerLogs option is invalid');
+  }
   return {
     version: 1,
     containers,
     ...(environment === undefined ? {} : { environment }),
+    ...(value.containerLogs === undefined ? {} : { containerLogs: value.containerLogs }),
   };
 };
 

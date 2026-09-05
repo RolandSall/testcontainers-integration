@@ -1,4 +1,5 @@
 import { Client } from 'pg';
+import { MongoClient } from 'mongodb';
 import { expect, test } from 'vitest';
 import { Container } from './container-kind.js';
 import { resolveContainerProjectEnvironment } from './container-environment.js';
@@ -106,13 +107,24 @@ dockerTest(
 );
 
 dockerTest(
-  'given the MongoDB adapter, when a live runtime starts, then a dynamically mapped endpoint is returned',
+  'given the MongoDB adapter, when a document is stored through its connection string, then it can be read back',
   async () => {
     const runtime = new ContainerRuntime(registry());
+    let client: MongoClient | undefined;
     try {
       const resource = (await runtime.start([Container.MongoDb])).get(Container.MongoDb);
       expect(resource.connectionString).toContain(String(resource.port));
+      expect(resource.connectionString).toContain('directConnection=true');
+      client = new MongoClient(resource.connectionString);
+      await client.connect();
+      const notes = client.db('integration').collection<{ id: string; body: string }>('notes');
+      await notes.insertOne({ id: 'note-1', body: 'actually saved' });
+      await expect(notes.findOne({ id: 'note-1' })).resolves.toMatchObject({
+        id: 'note-1',
+        body: 'actually saved',
+      });
     } finally {
+      await client?.close();
       await runtime.stop();
     }
   },

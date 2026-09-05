@@ -13,6 +13,8 @@ export interface JestContainerProjectOptions<
   readonly include: readonly string[];
   readonly containers: TContainers;
   readonly application?: string | ContainerProjectApplication<TContainers>;
+  /** Streams raw container output. Disabled by default. */
+  readonly containerLogs?: boolean;
   /** Runner-specific options such as ts-jest transform configuration. */
   readonly jest?: Omit<Config, 'testMatch' | 'globalSetup' | 'globalTeardown' | 'setupFilesAfterEnv' | 'globals'>;
 }
@@ -43,6 +45,7 @@ export const defineContainerProject = <
     [CONTAINER_PROJECT_CONTEXT_KEY]: serializeContainerProject(
       options.containers,
       environment,
+      options.containerLogs,
     ),
   },
   });

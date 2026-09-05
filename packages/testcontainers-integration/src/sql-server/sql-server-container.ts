@@ -81,7 +81,7 @@ export class SqlServerTestContainer implements TestContainer<SqlServerResource> 
       `container:${this.kind}`,
       `preparing image ${image}`,
     );
-    if (options.logger !== undefined) {
+    if (options.containerLogs === true && options.logger !== undefined) {
       container = container.withLogConsumer(
         createContainerLogConsumer(this.kind, options.logger),
       );
