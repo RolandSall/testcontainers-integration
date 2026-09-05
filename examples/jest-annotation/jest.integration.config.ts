@@ -1,14 +1,11 @@
-import type { Config } from 'jest';
+import { defineAnnotationProject } from '@integration-testing/testcontainers/jest';
 
-const config: Config = {
-  testMatch: ['**/*.container.integration.test.ts'],
-  globalSetup: './test/jest.container.global-setup.ts',
-  globalTeardown: './test/jest.container.global-teardown.ts',
-  setupFilesAfterEnv: ['./test/application.jest.setup.ts'],
-  moduleNameMapper: { '^(\\.{1,2}/.*)\\.js$': '$1' },
-  transform: {
-    '^.+\\.tsx?$': ['ts-jest', { tsconfig: './tsconfig.jest.json', useESM: false }],
+export default defineAnnotationProject({
+  application: './test/application.jest.setup.ts',
+  jest: {
+    moduleNameMapper: { '^(\\.{1,2}/.*)\\.js$': '$1' },
+    transform: {
+      '^.+\\.tsx?$': ['ts-jest', { tsconfig: './tsconfig.jest.json', useESM: false }],
+    },
   },
-};
-
-export default config;
+});

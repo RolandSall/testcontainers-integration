@@ -2,40 +2,32 @@
 
 Minimal, typed Testcontainers lifecycle management for NestJS and other Node.js backends using Vitest, Jest, or a custom test runner.
 
-Declare the infrastructure an integration-test project needs. The library starts each container once, gives your application typed connection details, and always stops the application before tearing down its containers and network.
+Declare the infrastructure each integration test needs beside the test itself. The library starts each container once, gives your application typed connection details, and always stops the application before tearing down its containers and network.
 
 ```ts
-import { fromContainer, postgreSql, rabbitMq } from '@integration-testing/testcontainers';
-import { defineContainerProject } from '@integration-testing/testcontainers/vitest';
+import {
+  ApplicationIntegrationTest,
+  Container,
+  RequiredContainer,
+} from '@integration-testing/testcontainers';
 
-export default defineContainerProject({
-  include: ['test/**/*.integration.test.ts'],
-  containers: {
-    database: postgreSql(),
-    messages: rabbitMq(),
-  },
-  application: {
-    setup: './test/application.setup.ts',
-    environment: {
-      DATABASE_URL: fromContainer('database', 'connectionUri'),
-      RABBITMQ_URL: fromContainer('messages', 'amqpUrl'),
-    },
-  },
-});
+@RequiredContainer([Container.RabbitMq, Container.PostgreSql])
+@ApplicationIntegrationTest
+export class OrderApplicationIntegrationTest {}
 ```
 
-That concise project configuration is the recommended API. Decorator-based discovery remains available when placing requirements beside a test class is valuable.
+Annotation mode is the primary API shown in this guide. A project configuration API is also supported for developers who prefer not to use annotations.
 
 ## Choose one of the two modes
 
-Both modes use the same containers, typed resources, application lifecycle, and cleanup behavior. Choose the style your team finds clearer.
+Both modes use the same containers, typed resources, application lifecycle, and cleanup behavior.
 
 | Mode | Syntax | Best fit | Tradeoff |
 | --- | --- | --- | --- |
-| Project configuration | `defineContainerProject({ containers: ... })` | Teams that prefer one explicit, central runner configuration | Every container requirement is declared in the config rather than beside a test |
-| Annotation discovery | `@RequiredContainer([Container.PostgreSql, ...])` | Teams that prefer annotations and want requirements visible on the test marker | Requires decorator support and literal source scanning |
+| Annotation mode | `@RequiredContainer([Container.PostgreSql, ...])` | Teams that want each test file to declare its own infrastructure requirements | Requires `experimentalDecorators` and the scanner lifecycle settings shown below |
+| Project configuration | `defineContainerProject({ containers: ... })` | Developers who prefer one explicit, central runner configuration instead of annotations | Every container requirement is declared in the config rather than beside a test |
 
-Project configuration is the recommended default because it has less hidden behavior. Annotation mode is fully supported if your team prefers that style. Do not combine both modes in the same Jest or Vitest project; use separate runner configs when a repository uses both.
+This guide starts with annotation mode. If annotations are not your preference, use the project configuration mode shown second. Do not combine both modes in the same Jest or Vitest project; use separate runner configs when a repository uses both.
 
 ## Why use it?
 
@@ -45,8 +37,8 @@ Project configuration is the recommended default because it has less hidden beha
 - Application startup only after infrastructure is ready.
 - Deterministic reverse-order cleanup, including partial-startup failures.
 - First-class Vitest 4 and Jest 30 lifecycle adapters.
-- NestJS application startup and shutdown without adding NestJS as a library dependency.
-- Runner-neutral core for Cucumber, Node's test runner, or custom harnesses.
+- Works with NestJS applications: start the app after containers are ready and close it after the tests. NestJS remains your application's dependency, not this package's dependency.
+- Can be used without Jest or Vitest by starting and stopping `ContainerRuntime` from Cucumber hooks, Node.js test hooks, or your own test setup.
 - No dependency on NestJS or any other backend framework.
 
 ## Requirements
@@ -56,28 +48,33 @@ Project configuration is the recommended default because it has less hidden beha
 - Vitest 4.x or Jest 30.x for its matching adapter
 - TypeScript 5.5 through 6.x when using TypeScript
 
-Install the library and one runner:
+Most TypeScript backends already have TypeScript and a test runner. In that case, install only this library:
 
 ```bash
-npm install --save-dev @integration-testing/testcontainers@beta vitest@4.1.11 typescript
+npm install --save-dev @integration-testing/testcontainers@beta
 ```
 
-or:
+If the project does not have a test runner yet, install one. You do not need both runners.
+
+For Vitest:
 
 ```bash
-npm install --save-dev @integration-testing/testcontainers@beta jest@30 ts-jest@29 typescript @types/jest
+npm install --save-dev vitest@4
 ```
+
+For Jest with TypeScript:
+
+```bash
+npm install --save-dev jest@30 ts-jest@29 @types/jest
+```
+
+The library already includes TypeScript for annotation scanning. Your application should still keep its own direct TypeScript dependency when it compiles or type-checks TypeScript. Jest additionally needs a configured transformer such as `ts-jest`; Vitest transforms TypeScript itself. `@types/jest` supplies Jest's global TypeScript types.
+
+The supported runner ranges are Vitest `>=4 <5` and Jest `>=30 <31`. Vitest 4.0.18 and 4.1.11 have both been exercised, so 4.1.11 is not the minimum.
 
 With npm 10.9, if installing Vitest fails with an internal `edgesOut` resolver error, retry the same command with `--legacy-peer-deps`. This is an npm resolver workaround; it does not change the runtime configuration.
 
-Install only the clients used by your SUT. The complete PostgreSQL and RabbitMQ example uses:
-
-```bash
-npm install pg amqplib
-npm install --save-dev @types/pg @types/amqplib
-```
-
-The library starts PostgreSQL and RabbitMQ, but it deliberately does not choose your application's database or messaging client. `pg` and `amqplib` above belong to the example application, not the library.
+Complete PostgreSQL and RabbitMQ applications with their client dependencies are available in the [Vitest annotation example](https://github.com/RolandSall/testcontainers-integration/tree/main/examples/vitest-annotation) and [Jest annotation example](https://github.com/RolandSall/testcontainers-integration/tree/main/examples/jest-annotation).
 
 A minimal TypeScript setup for the Vitest example is:
 
@@ -95,42 +92,9 @@ A minimal TypeScript setup for the Vitest example is:
 }
 ```
 
-## Get started with Vitest
+## Example SUT used by both modes
 
-This complete example starts PostgreSQL and RabbitMQ, starts a plain Node.js backend, writes and reads a database row, and publishes and consumes a message.
-
-### 1. Configure the integration project
-
-```ts
-// vitest.integration.config.ts
-import { fromContainer, postgreSql, rabbitMq } from '@integration-testing/testcontainers';
-import { defineContainerProject } from '@integration-testing/testcontainers/vitest';
-
-export default defineContainerProject({
-  include: ['test/**/*.integration.test.ts'],
-  containers: {
-    database: postgreSql(),
-    messages: rabbitMq(),
-  },
-  application: {
-    setup: './test/application.setup.ts',
-    environment: {
-      DATABASE_URL: fromContainer('database', 'connectionUri'),
-      RABBITMQ_URL: fromContainer('messages', 'amqpUrl'),
-    },
-  },
-  hookTimeout: 360_000,
-  testTimeout: 30_000,
-});
-```
-
-No consumer-owned global setup or teardown files are needed.
-
-The object keys `database` and `messages` name the two container instances. Each `fromContainer(name, property)` binding copies a discovered connection value into the application process before its setup module and SUT start. TypeScript rejects unknown names and properties that do not belong to that container kind. The library also validates deserialized configuration at runtime and restores previous environment values after the run.
-
-### 2. SUT to be tested
-
-SUT means system under test. `ExampleBackend` is the application code being tested in this runnable example. It is not part of the library API and you do not need to create a class like this when your project already has an application or service. This small framework-free backend is included so the example can perform real PostgreSQL and RabbitMQ operations:
+SUT means system under test. Both modes below use the same small framework-free backend so their tests can perform real PostgreSQL and RabbitMQ operations. `ExampleBackend` is application code being tested, not part of the library API. If your project already has an application or service, use that instead.
 
 ```ts
 // src/example-backend.ts
@@ -200,7 +164,204 @@ export class ExampleBackend {
 }
 ```
 
-### 3. Register how the application starts and stops
+## Annotation mode
+
+Annotation mode keeps each test file's infrastructure requirements beside its tests. The scanner reads literal `@RequiredContainer([Container.Name, ...])` declarations before test modules load. One annotation can list every container required by that file.
+
+### Required annotation settings
+
+Enable decorators in the `tsconfig.json` that compiles your tests:
+
+```json
+{
+  "compilerOptions": {
+    "experimentalDecorators": true
+  }
+}
+```
+
+Name the test with the default `.container.integration.test.ts` suffix and use a literal declaration:
+
+```ts
+// test/order.container.integration.test.ts
+@RequiredContainer([Container.RabbitMq, Container.PostgreSql])
+@ApplicationIntegrationTest
+export class OrderApplicationIntegrationTest {}
+```
+
+The complete Vitest and Jest configurations below register the required lifecycle hooks. For a different filename convention, set `testFileSuffix` and update the runner's `include` or `testMatch` pattern. Point your IDE to that same runner config. A Jest `tsconfig.jest.json` must inherit the decorator setting; `emitDecoratorMetadata` is not required by this library.
+
+### Vitest annotation setup
+
+Configure annotation discovery and the application setup in one file:
+
+```ts
+// vitest.annotation.config.ts
+import { defineAnnotationProject } from '@integration-testing/testcontainers/vitest';
+
+export default defineAnnotationProject({
+  application: './test/application.vitest.setup.ts',
+  hookTimeout: 360_000,
+  testTimeout: 30_000,
+});
+```
+
+`defineAnnotationProject` supplies the default test-file pattern, scanner setup, container teardown, and application setup registration. Pass `include` or `testFileSuffix` only when your project uses a different convention.
+
+Connect the same SUT shown above by reading typed resources:
+
+```ts
+// test/application.vitest.setup.ts
+import { Container } from '@integration-testing/testcontainers';
+import { installVitestApplicationIntegrationTestSupport } from '@integration-testing/testcontainers/vitest';
+import { ExampleBackend } from '../src/example-backend.js';
+
+export const applicationContext = installVitestApplicationIntegrationTestSupport({
+  start: (resources) => ExampleBackend.start(
+    resources.get(Container.PostgreSql).connectionUri,
+    resources.get(Container.RabbitMq).amqpUrl,
+  ),
+  stop: (application) => application.close(),
+});
+```
+
+The annotated marker and the actual tests can live in the same file:
+
+```ts
+// test/order.container.integration.test.ts
+import { expect, test } from 'vitest';
+import {
+  ApplicationIntegrationTest,
+  Container,
+  RequiredContainer,
+} from '@integration-testing/testcontainers';
+import { applicationContext } from './application.vitest.setup.js';
+
+@RequiredContainer([Container.RabbitMq, Container.PostgreSql])
+@ApplicationIntegrationTest
+export class OrderApplicationIntegrationTest {}
+
+test('stores and reads a row in PostgreSQL', async () => {
+  await expect(
+    applicationContext.current().saveAndFind('note-1', 'actually saved'),
+  ).resolves.toBe('actually saved');
+});
+```
+
+```bash
+npx vitest run --config vitest.annotation.config.ts
+```
+
+Keep one `@ApplicationIntegrationTest` marker class per test file.
+
+### Jest annotation setup
+
+Jest uses the same one-file annotation project helper:
+
+```ts
+// jest.annotation.config.ts
+import { defineAnnotationProject } from '@integration-testing/testcontainers/jest';
+
+export default defineAnnotationProject({
+  application: './test/application.jest.setup.ts',
+  jest: {
+    moduleNameMapper: { '^(\\.{1,2}/.*)\\.js$': '$1' },
+    transform: {
+      '^.+\\.tsx?$': ['ts-jest', { tsconfig: './tsconfig.jest.json', useESM: false }],
+    },
+    testTimeout: 30_000,
+  },
+});
+```
+
+The helper supplies `testMatch`, `globalSetup`, `globalTeardown`, and `setupFilesAfterEnv`. The remaining `jest` block is ordinary TypeScript transformation configuration. Keep your existing transform when your project already runs TypeScript tests successfully.
+
+```ts
+// test/application.jest.setup.ts
+import { Container } from '@integration-testing/testcontainers';
+import { installJestApplicationIntegrationTestSupport } from '@integration-testing/testcontainers/jest';
+import { ExampleBackend } from '../src/example-backend.js';
+
+export const applicationContext = installJestApplicationIntegrationTestSupport({
+  start: (resources) => ExampleBackend.start(
+    resources.get(Container.PostgreSql).connectionUri,
+    resources.get(Container.RabbitMq).amqpUrl,
+  ),
+  stop: (application) => application.close(),
+});
+```
+
+Write the annotated Jest test:
+
+```ts
+// test/order.container.integration.test.ts
+import { expect, test } from '@jest/globals';
+import {
+  ApplicationIntegrationTest,
+  Container,
+  RequiredContainer,
+} from '@integration-testing/testcontainers';
+import { applicationContext } from './application.jest.setup.js';
+
+@RequiredContainer([Container.RabbitMq, Container.PostgreSql])
+@ApplicationIntegrationTest
+export class OrderApplicationIntegrationTest {}
+
+test('stores and reads a row in PostgreSQL', async () => {
+  await expect(
+    applicationContext.current().saveAndFind('note-1', 'actually saved'),
+  ).resolves.toBe('actually saved');
+});
+```
+
+Then run:
+
+```bash
+npx jest --config jest.annotation.config.ts --runInBand
+```
+
+In annotation mode, one annotation lists every required container. The previous single-container and variadic forms remain supported. Complete repository fixtures live in [`examples/vitest-annotation`](./examples/vitest-annotation) and [`examples/jest-annotation`](./examples/jest-annotation).
+
+Do not mix project configuration and annotation discovery in the same runner project. Keep them as separate Vitest or Jest configs if you use both styles in one repository.
+
+## Project configuration mode
+
+Project configuration is the second mode. Use it when you prefer to declare all required containers in one explicit runner configuration instead of using annotations.
+
+### Get started with Vitest
+
+This complete example starts PostgreSQL and RabbitMQ, starts a plain Node.js backend, writes and reads a database row, and publishes and consumes a message.
+
+#### 1. Configure the integration project
+
+```ts
+// vitest.integration.config.ts
+import { fromContainer, postgreSql, rabbitMq } from '@integration-testing/testcontainers';
+import { defineContainerProject } from '@integration-testing/testcontainers/vitest';
+
+export default defineContainerProject({
+  include: ['test/**/*.integration.test.ts'],
+  containers: {
+    database: postgreSql(),
+    messages: rabbitMq(),
+  },
+  application: {
+    setup: './test/application.setup.ts',
+    environment: {
+      DATABASE_URL: fromContainer('database', 'connectionUri'),
+      RABBITMQ_URL: fromContainer('messages', 'amqpUrl'),
+    },
+  },
+  hookTimeout: 360_000,
+  testTimeout: 30_000,
+});
+```
+
+No consumer-owned global setup or teardown files are needed.
+
+The object keys `database` and `messages` name the two container instances. Each `fromContainer(name, property)` binding copies a discovered connection value into the application process before its setup module and SUT start. TypeScript rejects unknown names and properties that do not belong to that container kind. The library also validates deserialized configuration at runtime and restores previous environment values after the run.
+
+#### 2. Register how the application starts and stops
 
 The setup file connects the sample application to the test lifecycle. The runner configuration has already installed `DATABASE_URL` and `RABBITMQ_URL` before this module loads. The installer keeps the value returned by `start` available during tests and passes it to `stop` afterward:
 
@@ -220,7 +381,7 @@ export const applicationContext = installVitestApplicationIntegrationTestSupport
 
 Environment names are deliberately explicit because only the application knows whether it expects `DATABASE_URL`, `PG_URL`, or another convention. If a SUT accepts a configuration object instead, keep the shorter `application: './test/application.setup.ts'` form and read typed resources in `start(resources)` with `resources.get(Container.PostgreSql)`.
 
-### 4. Write the integration tests
+#### 3. Write the integration tests
 
 This is the actual test code. It calls the application returned by `start` and asserts observable database and messaging behavior:
 
@@ -250,7 +411,7 @@ npx vitest run --config vitest.integration.config.ts
 
 The repository contains this as a runnable example in [`examples/vitest-project`](./examples/vitest-project).
 
-## Get started with Jest
+### Get started with Jest
 
 The application lifecycle and assertions are identical. Only the runner imports and config differ:
 
@@ -343,200 +504,6 @@ export { default } from './jest.integration.config.ts';
 ```
 
 See the runnable [`examples/jest-project`](./examples/jest-project).
-
-## Optional annotation mode
-
-Annotation mode uses the same runtime and resources. It is useful when one integration project contains test files with different infrastructure requirements. The scanner reads literal `@RequiredContainer([Container.Name, ...])` declarations before test modules load.
-
-Enable decorators in `tsconfig.json`:
-
-```json
-{
-  "compilerOptions": {
-    "experimentalDecorators": true
-  }
-}
-```
-
-### Vitest annotation setup
-
-Create the global lifecycle module:
-
-```ts
-// test/vitest.container.global-setup.ts
-import { createDefaultContainerRegistry } from '@integration-testing/testcontainers';
-import { createVitestContainerGlobalSetup } from '@integration-testing/testcontainers/vitest';
-
-const lifecycle = createVitestContainerGlobalSetup({
-  root: new URL('..', import.meta.url).pathname,
-  registry: createDefaultContainerRegistry(),
-});
-
-export const setup = lifecycle.setup;
-export const teardown = lifecycle.teardown;
-```
-
-Configure the scanner and application setup:
-
-```ts
-// vitest.annotation.config.ts
-import { defineConfig } from 'vitest/config';
-
-export default defineConfig({
-  test: {
-    include: ['test/**/*.container.integration.test.ts'],
-    globalSetup: ['./test/vitest.container.global-setup.ts'],
-    setupFiles: ['./test/application.vitest.setup.ts'],
-    hookTimeout: 360_000,
-    testTimeout: 30_000,
-  },
-});
-```
-
-Connect the same SUT shown above by reading typed resources:
-
-```ts
-// test/application.vitest.setup.ts
-import { Container } from '@integration-testing/testcontainers';
-import { installVitestApplicationIntegrationTestSupport } from '@integration-testing/testcontainers/vitest';
-import { ExampleBackend } from '../src/example-backend.js';
-
-export const applicationContext = installVitestApplicationIntegrationTestSupport({
-  start: (resources) => ExampleBackend.start(
-    resources.get(Container.PostgreSql).connectionUri,
-    resources.get(Container.RabbitMq).amqpUrl,
-  ),
-  stop: (application) => application.close(),
-});
-```
-
-The annotated marker and the actual tests can live in the same file:
-
-```ts
-// test/order.container.integration.test.ts
-import { expect, test } from 'vitest';
-import {
-  ApplicationIntegrationTest,
-  Container,
-  RequiredContainer,
-} from '@integration-testing/testcontainers';
-import { applicationContext } from './application.vitest.setup.js';
-
-@RequiredContainer([Container.RabbitMq, Container.PostgreSql])
-@ApplicationIntegrationTest
-export class OrderApplicationIntegrationTest {}
-
-test('stores and reads a row in PostgreSQL', async () => {
-  await expect(
-    applicationContext.current().saveAndFind('note-1', 'actually saved'),
-  ).resolves.toBe('actually saved');
-});
-```
-
-```bash
-npx vitest run --config vitest.annotation.config.ts
-```
-
-By default, the scanner only reads files ending in `.container.integration.test.ts`. Set `testFileSuffix` in `createVitestContainerGlobalSetup` when your convention differs. Keep one `@ApplicationIntegrationTest` marker class per test file.
-
-### Jest annotation setup
-
-Jest needs one shared lifecycle module and two small wrapper modules because it configures global setup and teardown separately:
-
-```ts
-// test/jest.container.lifecycle.ts
-import { resolve } from 'node:path';
-import { createDefaultContainerRegistry } from '@integration-testing/testcontainers';
-import { createJestContainerGlobalSetup } from '@integration-testing/testcontainers/jest';
-
-export const lifecycle = createJestContainerGlobalSetup({
-  root: resolve(__dirname, '..'),
-  registry: createDefaultContainerRegistry(),
-});
-```
-
-```ts
-// test/jest.container.global-setup.ts
-import { lifecycle } from './jest.container.lifecycle';
-
-export default lifecycle.setup;
-```
-
-```ts
-// test/jest.container.global-teardown.ts
-import { lifecycle } from './jest.container.lifecycle';
-
-export default lifecycle.teardown;
-```
-
-Use extensionless local imports in these two wrapper modules. Jest does not apply `moduleNameMapper` while it loads global setup and teardown.
-
-```ts
-// jest.annotation.config.ts
-import type { Config } from 'jest';
-
-const config: Config = {
-  testMatch: ['**/test/**/*.container.integration.test.ts'],
-  globalSetup: './test/jest.container.global-setup.ts',
-  globalTeardown: './test/jest.container.global-teardown.ts',
-  setupFilesAfterEnv: ['./test/application.jest.setup.ts'],
-  moduleNameMapper: { '^(\\.{1,2}/.*)\\.js$': '$1' },
-  transform: {
-    '^.+\\.tsx?$': ['ts-jest', { tsconfig: './tsconfig.jest.json', useESM: false }],
-  },
-  testTimeout: 30_000,
-};
-
-export default config;
-```
-
-```ts
-// test/application.jest.setup.ts
-import { Container } from '@integration-testing/testcontainers';
-import { installJestApplicationIntegrationTestSupport } from '@integration-testing/testcontainers/jest';
-import { ExampleBackend } from '../src/example-backend.js';
-
-export const applicationContext = installJestApplicationIntegrationTestSupport({
-  start: (resources) => ExampleBackend.start(
-    resources.get(Container.PostgreSql).connectionUri,
-    resources.get(Container.RabbitMq).amqpUrl,
-  ),
-  stop: (application) => application.close(),
-});
-```
-
-Write the annotated Jest test:
-
-```ts
-// test/order.container.integration.test.ts
-import { expect, test } from '@jest/globals';
-import {
-  ApplicationIntegrationTest,
-  Container,
-  RequiredContainer,
-} from '@integration-testing/testcontainers';
-import { applicationContext } from './application.jest.setup.js';
-
-@RequiredContainer([Container.RabbitMq, Container.PostgreSql])
-@ApplicationIntegrationTest
-export class OrderApplicationIntegrationTest {}
-
-test('stores and reads a row in PostgreSQL', async () => {
-  await expect(
-    applicationContext.current().saveAndFind('note-1', 'actually saved'),
-  ).resolves.toBe('actually saved');
-});
-```
-
-Then run:
-
-```bash
-npx jest --config jest.annotation.config.ts --runInBand
-```
-
-In annotation mode, one annotation lists every required container. The previous single-container and variadic forms remain supported. Complete repository fixtures live in [`examples/vitest-annotation`](./examples/vitest-annotation) and [`examples/jest-annotation`](./examples/jest-annotation).
-
-Do not mix concise project declarations and annotation discovery in the same runner project. Keep them as separate Vitest or Jest configs if you use both styles in one repository.
 
 ## NestJS and framework support
 
@@ -659,10 +626,10 @@ Use `getNamed(name, kind)` when the configuration key matters or more than one i
 
 | Factory | Typed resource |
 | --- | --- |
-| `postgreSql(options?)` | host, port, database, username, password, `connectionUri` |
-| `sqlServer(options?)` | host, port, database, username, password |
-| `mongoDb(options?)` | host, port, host-safe `connectionString` |
-| `rabbitMq(options?)` | host, port, `amqpUrl`, `amqpsUrl` |
+| `postgreSql(options?)` | `host`, `port`, `database`, `username`, `password`, `connectionUri` |
+| `sqlServer(options?)` | `host`, `port`, `database`, `username`, `password` |
+| `mongoDb(options?)` | `host`, `port`, host-safe `connectionString` |
+| `rabbitMq(options?)` | `host`, `port`, `amqpUrl`, `amqpsUrl` |
 
 Configuration keys identify named instances. Explicit projects can run multiple containers of the same kind and bind each one independently:
 
@@ -844,7 +811,7 @@ export default defineContainerProject({
 });
 ```
 
-Annotation and direct-runtime users can pass the same `containerLogs: true` option to `createVitestContainerGlobalSetup`, `createJestContainerGlobalSetup`, or `ContainerRuntime`.
+Annotation-project users can set `containerLogs: true` in `defineAnnotationProject`. Custom-registry and direct-runtime users can pass it to `createVitestContainerGlobalSetup`, `createJestContainerGlobalSetup`, or `ContainerRuntime`.
 
 ## Direct runner-neutral usage
 

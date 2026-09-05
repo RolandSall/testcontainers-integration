@@ -9,6 +9,11 @@ export { installJestApplicationIntegrationTestSupport } from './install-jest-app
 export { discoverRequiredContainers } from '../discovery/required-container-discovery.js';
 export type { RequiredContainerDiscoveryOptions } from '../discovery/required-container-discovery.js';
 export {
+  defineAnnotationProject,
+  defineJestAnnotationProject,
+} from './define-annotation-project.js';
+export type { JestAnnotationProjectOptions } from './define-annotation-project.js';
+export {
   defineContainerProject,
   defineJestContainerProject,
 } from './define-container-project.js';

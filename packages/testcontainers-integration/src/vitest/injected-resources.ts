@@ -1,4 +1,5 @@
 import { inject } from 'vitest';
+import type { SerializedAnnotationProject } from '../annotation-project.js';
 import type { ContainerResources, SerializableContainerResources } from '../container-resources.js';
 import { parseContainerProject, type SerializedContainerProject } from '../container-project.js';
 import { CONTAINER_PROJECT_CONTEXT_KEY } from '../project-context.js';
@@ -9,6 +10,7 @@ declare module 'vitest' {
   export interface ProvidedContext {
     readonly 'integration-testing.testcontainers.resources': SerializableContainerResources;
     readonly 'integration-testing.testcontainers.project': SerializedContainerProject;
+    readonly 'integration-testing.testcontainers.annotation-project': SerializedAnnotationProject;
   }
 }
 

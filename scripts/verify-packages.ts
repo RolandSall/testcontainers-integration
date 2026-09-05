@@ -84,7 +84,10 @@ const main = async (): Promise<void> => {
         throw new Error(`Archive ${archive} exceeds the 350-entry package budget`);
       }
       const runnerEntries = [
+        'package/dist/vitest/annotation-global-setup.js',
         'package/dist/vitest/project-global-setup.js',
+        'package/dist/jest/annotation-global-setup.js',
+        'package/dist/jest/annotation-global-teardown.js',
         'package/dist/jest/project-global-setup.js',
         'package/dist/jest/project-global-teardown.js',
       ];
@@ -209,6 +212,21 @@ assert.equal(typeof containers.rabbitMq, 'function');
 assert.equal(typeof containers.fromContainer, 'function');
 assert.equal(typeof vitestAdapter.defineContainerProject, 'function');
 assert.equal(typeof jestAdapter.defineContainerProject, 'function');
+assert.equal(typeof vitestAdapter.defineAnnotationProject, 'function');
+assert.equal(typeof jestAdapter.defineAnnotationProject, 'function');
+const vitestAnnotations = vitestAdapter.defineAnnotationProject({
+  application: './test/application.setup.ts',
+});
+assert.deepEqual(vitestAnnotations.test.globalSetup, [
+  '@integration-testing/testcontainers/vitest/annotation-global-setup',
+]);
+const jestAnnotations = jestAdapter.defineAnnotationProject({
+  application: './test/application.setup.ts',
+});
+assert.equal(
+  jestAnnotations.globalSetup,
+  '@integration-testing/testcontainers/jest/annotation-global-setup',
+);
 const vitestProject = vitestAdapter.defineContainerProject({
   include: ['test/**/*.integration.test.ts'],
   containers: {
@@ -247,6 +265,12 @@ assert.equal(typeof jestAdapter.createJestContainerGlobalSetup, 'function');
 assert.equal(typeof containers.postgreSql, 'function');
 assert.equal(typeof containers.fromContainer, 'function');
 assert.equal(typeof jestAdapter.defineContainerProject, 'function');
+assert.equal(typeof jestAdapter.defineAnnotationProject, 'function');
+const jestAnnotations = jestAdapter.defineAnnotationProject();
+assert.equal(
+  jestAnnotations.globalTeardown,
+  '@integration-testing/testcontainers/jest/annotation-global-teardown',
+);
 const jestProject = jestAdapter.defineContainerProject({
   include: ['test/**/*.integration.test.ts'],
   containers: { database: containers.postgreSql() },
@@ -270,13 +294,23 @@ assert.throws(
 const configurationSmoke = `
 import { fromContainer, postgreSql, rabbitMq } from '@integration-testing/testcontainers';
 import { defineContainerProject as defineJestContainerProject } from '@integration-testing/testcontainers/jest';
+import { defineAnnotationProject as defineJestAnnotationProject } from '@integration-testing/testcontainers/jest';
 import { defineContainerProject as defineVitestContainerProject } from '@integration-testing/testcontainers/vitest';
+import { defineAnnotationProject as defineVitestAnnotationProject } from '@integration-testing/testcontainers/vitest';
 
 const containers = {
   primaryDatabase: postgreSql(),
   auditDatabase: postgreSql({ database: 'audit' }),
   messages: rabbitMq(),
 };
+
+defineVitestAnnotationProject({
+  application: './test/application.setup.ts',
+});
+
+defineJestAnnotationProject({
+  application: './test/application.setup.ts',
+});
 
 defineVitestContainerProject({
   include: ['test/**/*.integration.test.ts'],

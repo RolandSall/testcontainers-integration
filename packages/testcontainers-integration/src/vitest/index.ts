@@ -10,6 +10,11 @@ export { discoverRequiredContainers } from './required-container-scanner.js';
 export type { RequiredContainerDiscoveryOptions } from './required-container-scanner.js';
 export { installVitestApplicationIntegrationTestSupport } from './install-vitest-application-integration-test-support.js';
 export {
+  defineAnnotationProject,
+  defineVitestAnnotationProject,
+} from './define-annotation-project.js';
+export type { VitestAnnotationProjectOptions } from './define-annotation-project.js';
+export {
   defineContainerProject,
   defineVitestContainerProject,
 } from './define-container-project.js';

@@ -1,6 +1,24 @@
 # Runner lifecycle
 
-## Concise project mode
+## Annotation mode
+
+Both adapters can configure built-in annotation discovery without consumer-owned global setup files:
+
+```ts
+import { defineAnnotationProject } from '@integration-testing/testcontainers/vitest';
+
+export default defineAnnotationProject({
+  application: './test/application.vitest.setup.ts',
+  hookTimeout: 360_000,
+  testTimeout: 30_000,
+});
+```
+
+Import the Jest variant from `@integration-testing/testcontainers/jest` and pass ordinary Jest
+options through its `jest` property. The helper owns scanner setup and container teardown. Use the
+lower-level global lifecycle API when annotation discovery needs a custom container registry.
+
+## Project configuration mode
 
 Both adapters can own their setup and teardown from one serializable declaration:
 
@@ -31,7 +49,7 @@ Vitest `globalSetup` discovers requirements and starts one shared runtime. It tr
 serializable resources through `project.provide`. `setupFiles` registers file-level application
 hooks, and `inject` restores typed resources in the worker.
 
-In concise mode the package-owned global setup reads the serialized project declaration instead
+In project configuration mode the package-owned global setup reads the serialized project declaration instead
 of scanning test source. Named environment bindings are resolved after startup and installed
 before worker setup files load. Existing values are restored during teardown.
 
@@ -46,7 +64,7 @@ share global-setup values with test suites. The adapter writes resources to a ge
 permission-restricted temporary JSON file and exposes only its path to workers.
 `setupFilesAfterEnv` restores resources and registers application hooks.
 
-In concise mode the package-owned global setup and teardown are configured automatically.
+In both annotation and project configuration modes, package-owned global setup and teardown are configured automatically.
 Runner-specific transforms remain the consumer's responsibility and can be passed through the
 `jest` property.
 
