@@ -1,0 +1,7 @@
+{
+  "name": "example-vitest-project",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "examples/vitest-project/test",
+  "projectType": "application",
+  "tags": ["type:example", "runner:vitest", "mode:project"]
+}

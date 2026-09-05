@@ -1,47 +1,46 @@
 {
-  "name": "container-integration-testing",
-  "version": "0.0.0",
+  "name": "testcontainers-integration-workspace",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "sideEffects": false,
-  "engines": { "node": ">=22.22" },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./container-resource-map": {
-      "types": "./dist/container-resource-map.d.ts",
-      "import": "./dist/container-resource-map.js"
-    },
-    "./vitest": {
-      "types": "./dist/vitest/index.d.ts",
-      "import": "./dist/vitest/index.js"
-    },
-    "./jest": {
-      "types": "./dist/jest/index.d.ts",
-      "import": "./dist/jest/index.js"
-    }
+  "packageManager": "bun@1.3.5",
+  "engines": {
+    "node": ">=22.18"
   },
-  "files": ["dist", "README.md"],
+  "workspaces": [
+    "packages/testcontainers-integration",
+    "examples/*",
+    "runner-tests/*"
+  ],
   "scripts": {
-    "build": "bun scripts/clean-dist.ts && tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "build": "nx run-many -t build",
+    "typecheck": "tsc --noEmit -p tsconfig.json && nx run-many -t typecheck",
+    "test": "nx run-many -t test",
+    "test:runners": "bun run build && tsc --noEmit -p runner-tests/jest/tsconfig.jest.json && tsc --noEmit -p runner-tests/vitest/tsconfig.json && jest --config runner-tests/jest/jest.config.ts --runInBand && vitest run --config runner-tests/vitest/vitest.config.ts",
+    "test:docker": "nx run testcontainers-integration:test-docker",
+    "test:examples:docker": "bun run build && bun --cwd examples/vitest-project integration && bun --cwd examples/jest-project integration && bun --cwd examples/vitest-annotation integration && bun --cwd examples/jest-annotation integration",
+    "lint": "eslint packages examples runner-tests scripts --max-warnings=0",
+    "verify": "bun run typecheck && bun run lint && bun run test && bun run test:runners && bun run build && bun run pack:check",
+    "pack:check": "bun scripts/verify-packages.ts",
+    "release:check": "bun scripts/verify-release.ts"
   },
-  "dependencies": {
-    "@testcontainers/mssqlserver": "12.1.0",
-    "testcontainers": "12.1.0",
-    "typescript": ">=5.5 <7"
-  },
-  "peerDependencies": {
-    "jest": ">=30 <31",
-    "vitest": ">=4 <5"
-  },
-  "peerDependenciesMeta": {
-    "jest": { "optional": true },
-    "vitest": { "optional": true }
+  "devDependencies": {
+    "@eslint/js": "^9.35.0",
+    "@jest/globals": "^30.0.0",
+    "@types/amqplib": "^0.10.7",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.18.0",
+    "@types/pg": "^8.15.5",
+    "amqplib": "^0.10.9",
+    "eslint": "^9.35.0",
+    "jest": "^30.1.3",
+    "nx": "^21.5.2",
+    "pg": "^8.16.3",
+    "ts-jest": "^29.4.1",
+    "@integration-testing/testcontainers": "workspace:*",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.42.0",
+    "vitest": "^4.0.0"
   }
 }

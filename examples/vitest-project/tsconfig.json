@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "types": ["node", "vitest"] },
+  "include": ["**/*.ts", "../support/**/*.ts"]
+}

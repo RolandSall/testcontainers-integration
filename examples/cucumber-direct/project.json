@@ -1,0 +1,7 @@
+{
+  "name": "example-cucumber-direct",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "examples/cucumber-direct/src",
+  "projectType": "application",
+  "tags": ["type:example", "runner:cucumber"]
+}

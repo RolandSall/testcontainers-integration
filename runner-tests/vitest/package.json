@@ -1,0 +1,10 @@
+{
+  "name": "runner-test-vitest",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@integration-testing/testcontainers": "workspace:*",
+    "vitest": "^4.0.0"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "example-custom-container",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "examples/custom-container/src",
+  "projectType": "application",
+  "tags": ["type:example", "capability:custom-container"]
+}

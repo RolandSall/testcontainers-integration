@@ -1,0 +1,9 @@
+{
+  "name": "runner-test-jest",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@jest/globals": "^30.0.0",
+    "@integration-testing/testcontainers": "workspace:*"
+  }
+}

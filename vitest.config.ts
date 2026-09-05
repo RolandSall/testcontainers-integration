@@ -1,23 +1,16 @@
 import { defineConfig } from 'vitest/config';
-import { Container } from './src/container-kind.js';
-import { CONTAINER_RESOURCES_CONTEXT_KEY } from './src/vitest/context-key.js';
 
+/**
+ * Repository-root fallback for WebStorm gutter runs.
+ *
+ * Consumer applications should keep their own dedicated integration config. This file exists so
+ * an IDE command launched from this workspace root still loads the example's container lifecycle.
+ */
 export default defineConfig({
   test: {
-    setupFiles: [
-      './src/vitest/application-integration-test.setup.test-helper.ts',
-    ],
-    provide: {
-      [CONTAINER_RESOURCES_CONTEXT_KEY]: {
-        [Container.SqlServer]: {
-          kind: Container.SqlServer,
-          host: '127.0.0.1',
-          port: 14_333,
-          username: 'sa',
-          password: 'Container!Sql2026',
-          database: 'master',
-        },
-      },
-    },
+    include: ['examples/vitest-annotation/test/**/*.container.integration.test.ts'],
+    globalSetup: ['./examples/vitest-annotation/test/vitest.container.global-setup.ts'],
+    setupFiles: ['./examples/vitest-annotation/test/application.vitest.setup.ts'],
+    hookTimeout: 360_000,
   },
 });

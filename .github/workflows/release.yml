@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      npm-tag:
+        description: npm distribution tag
+        required: true
+        default: beta
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+          registry-url: https://registry.npmjs.org
+      - name: Install npm with trusted publishing support
+        run: npm install --global npm@11.5.1
+      - run: bun install --frozen-lockfile
+      - run: bun run verify
+      - run: bun run release:check
+      - name: Preflight npm package contents
+        run: npm publish packages/testcontainers-integration --dry-run --access public --tag "${{ inputs.npm-tag }}"
+      - name: Publish packages with provenance
+        run: npm publish packages/testcontainers-integration --provenance --access public --tag "${{ inputs.npm-tag }}"
