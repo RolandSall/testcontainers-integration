@@ -1,6 +1,6 @@
 # @integration-testing/testcontainers
 
-Minimal, typed Testcontainers lifecycle management for Vitest, Jest, and other Node.js test runners.
+Minimal, typed Testcontainers lifecycle management for NestJS and other Node.js backends using Vitest, Jest, or a custom test runner.
 
 Declare the infrastructure an integration-test project needs. The library starts each container once, gives your application typed connection details, and always stops the application before tearing down its containers and network.
 
@@ -45,6 +45,7 @@ Project configuration is the recommended default because it has less hidden beha
 - Application startup only after infrastructure is ready.
 - Deterministic reverse-order cleanup, including partial-startup failures.
 - First-class Vitest 4 and Jest 30 lifecycle adapters.
+- NestJS application startup and shutdown without adding NestJS as a library dependency.
 - Runner-neutral core for Cucumber, Node's test runner, or custom harnesses.
 - No dependency on NestJS or any other backend framework.
 
@@ -537,9 +538,9 @@ In annotation mode, one annotation lists every required container. The previous 
 
 Do not mix concise project declarations and annotation discovery in the same runner project. Keep them as separate Vitest or Jest configs if you use both styles in one repository.
 
-## Framework support
+## NestJS and framework support
 
-This is not a NestJS library. `ApplicationLifecycle<TApplication>` only requires:
+NestJS is supported through the application lifecycle contract, without forcing NestJS on projects that use another framework:
 
 ```ts
 interface ApplicationLifecycle<TApplication> {
@@ -560,6 +561,65 @@ That works with:
 | Plain Node.js | Any class or server handle | your cleanup method |
 
 The runnable examples intentionally use plain Node.js clients so framework neutrality is tested rather than merely claimed.
+
+### NestJS example
+
+Keep the same container project configuration shown above. Its environment bindings are installed before Nest compiles `AppModule`, so existing configuration modules can read `DATABASE_URL` and `RABBITMQ_URL` normally.
+
+Install the Nest testing tools and HTTP test client if your application does not already have them:
+
+```bash
+npm install @nestjs/common @nestjs/core @nestjs/platform-express @nestjs/testing reflect-metadata rxjs
+npm install --save-dev supertest @types/supertest
+```
+
+Register the Nest application lifecycle:
+
+```ts
+// test/application.setup.ts
+import type { INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { installVitestApplicationIntegrationTestSupport } from '@integration-testing/testcontainers/vitest';
+import { AppModule } from '../src/app.module.js';
+
+export const applicationContext =
+  installVitestApplicationIntegrationTestSupport<INestApplication>({
+    start: async () => {
+      const moduleRef = await Test.createTestingModule({
+        imports: [AppModule],
+      }).compile();
+      const application = moduleRef.createNestApplication();
+      await application.init();
+      return application;
+    },
+    stop: (application) => application.close(),
+  });
+```
+
+Test the initialized Nest application through its HTTP server:
+
+```ts
+// test/notes.integration.test.ts
+import request from 'supertest';
+import { expect, test } from 'vitest';
+import { applicationContext } from './application.setup.js';
+
+test('stores and reads a note through the NestJS API', async () => {
+  const server = applicationContext.current().getHttpServer();
+  const created = await request(server)
+    .post('/notes')
+    .send({ body: 'saved through NestJS' })
+    .expect(201);
+
+  const found = await request(server)
+    .get(`/notes/${created.body.id}`)
+    .expect(200);
+
+  expect(found.body).toMatchObject({ body: 'saved through NestJS' });
+});
+```
+
+This assumes the SUT already exposes `POST /notes` and `GET /notes/:id`. Replace those requests with your application endpoints. For Jest, use `installJestApplicationIntegrationTestSupport` and import `test` and `expect` from `@jest/globals`; the Nest lifecycle itself stays the same. NestJS works with both project configuration and annotation discovery.
 
 ## Use resources without starting an application
 

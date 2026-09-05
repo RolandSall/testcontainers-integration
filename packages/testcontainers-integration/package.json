@@ -1,9 +1,9 @@
 {
   "name": "@integration-testing/testcontainers",
   "version": "0.1.0-beta.1",
-  "description": "Typed, run-scoped Testcontainers lifecycle for Vitest, Jest, and Node.js backends",
+  "description": "Typed Testcontainers lifecycle for NestJS, Vitest, Jest, and Node.js backends",
   "author": "Roland Salloum",
-  "keywords": ["testcontainers", "integration-testing", "vitest", "jest", "docker"],
+  "keywords": ["testcontainers", "integration-testing", "nestjs", "vitest", "jest", "docker"],
   "license": "MIT",
   "publishConfig": { "access": "public" },
   "homepage": "https://github.com/RolandSall/testcontainers-integration#readme",
