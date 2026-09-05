@@ -17,7 +17,7 @@
   },
   "type": "module",
   "sideEffects": false,
-  "engines": { "node": ">=22.18" },
+  "engines": { "node": ">=22.22" },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/types/esm/index.d.ts",

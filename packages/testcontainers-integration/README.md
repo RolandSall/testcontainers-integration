@@ -37,7 +37,7 @@ Both modes share the same lifecycle and are fully supported. Project configurati
 
 ## Install
 
-Requirements are Node.js 22.18 or newer, a Testcontainers-compatible runtime, and Vitest 4.x or Jest 30.x when using a runner adapter.
+Requirements are Node.js 22.22 or newer, a Testcontainers-compatible runtime, and Vitest 4.x or Jest 30.x when using a runner adapter.
 
 ```bash
 npm install --save-dev @integration-testing/testcontainers@beta vitest

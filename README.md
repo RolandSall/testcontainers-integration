@@ -50,7 +50,7 @@ Project configuration is the recommended default because it has less hidden beha
 
 ## Requirements
 
-- Node.js 22.18 or newer
+- Node.js 22.22 or newer
 - Docker, Podman, or another Testcontainers-compatible runtime
 - Vitest 4.x or Jest 30.x for its matching adapter
 - TypeScript 5.5 through 6.x when using TypeScript
