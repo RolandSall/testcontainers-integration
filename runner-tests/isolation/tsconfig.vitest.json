@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "paths": {
+      "@integration-testing/testcontainers": ["packages/testcontainers-integration/src/index.ts"],
+      "@integration-testing/testcontainers/vitest": ["packages/testcontainers-integration/src/vitest/index.ts"]
+    },
+    "types": ["node", "vitest"]
+  },
+  "include": [
+    "vitest/**/*.ts",
+    "failure/**/*.ts",
+    "termination/**/*.ts",
+    "vitest.*.config.ts"
+  ]
+}

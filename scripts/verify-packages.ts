@@ -86,10 +86,13 @@ const main = async (): Promise<void> => {
       const runnerEntries = [
         'package/dist/vitest/annotation-global-setup.js',
         'package/dist/vitest/project-global-setup.js',
+        'package/dist/vitest/file-setup.js',
         'package/dist/jest/annotation-global-setup.js',
         'package/dist/jest/annotation-global-teardown.js',
         'package/dist/jest/project-global-setup.js',
         'package/dist/jest/project-global-teardown.js',
+        'package/dist/jest/file-setup.js',
+        'package/dist/jest/file-setup.cjs',
       ];
       const missingRunnerEntries = runnerEntries.filter(
         (entry) => !result.stdout.includes(entry),
@@ -230,8 +233,8 @@ assert.equal(
 const vitestProject = vitestAdapter.defineContainerProject({
   include: ['test/**/*.integration.test.ts'],
   containers: {
-    primaryDatabase: containers.postgreSql(),
-    auditDatabase: containers.postgreSql({ database: 'audit' }),
+    primaryDatabase: containers.postgreSql({ isolation: 'dedicated' }),
+    auditDatabase: containers.postgreSql({ isolation: 'dedicated', database: 'audit' }),
   },
   application: {
     setup: './test/application.setup.ts',
@@ -244,15 +247,30 @@ const vitestProject = vitestAdapter.defineContainerProject({
 assert.deepEqual(vitestProject.test.globalSetup, [
   '@integration-testing/testcontainers/vitest/project-global-setup',
 ]);
-assert.deepEqual(vitestProject.test.setupFiles, ['./test/application.setup.ts']);
+assert.deepEqual(vitestProject.test.setupFiles, [
+  '@integration-testing/testcontainers/vitest/file-setup',
+  './test/application.setup.ts',
+]);
 const jestProject = jestAdapter.defineContainerProject({
   include: ['test/**/*.integration.test.ts'],
-  containers: { messages: containers.rabbitMq() },
+  containers: { messages: containers.rabbitMq({ isolation: 'shared' }) },
 });
 assert.equal(
   jestProject.globalSetup,
   '@integration-testing/testcontainers/jest/project-global-setup',
 );
+const isolatedVitestProject = vitestAdapter.defineContainerProject({
+  include: ['test/**/*.integration.test.ts'],
+  containers: { database: containers.postgreSql({ isolation: 'dedicated' }) },
+  vitest: { maxWorkers: 2 },
+});
+assert.equal(isolatedVitestProject.test.maxWorkers, 2);
+const isolatedJestProject = jestAdapter.defineContainerProject({
+  include: ['test/**/*.integration.test.ts'],
+  containers: { database: containers.postgreSql({ isolation: 'dedicated' }) },
+  jest: { maxWorkers: 9 },
+});
+assert.equal(isolatedJestProject.maxWorkers, 9);
 `;
 
 const cjsSmoke = `
@@ -266,14 +284,15 @@ assert.equal(typeof containers.postgreSql, 'function');
 assert.equal(typeof containers.fromContainer, 'function');
 assert.equal(typeof jestAdapter.defineContainerProject, 'function');
 assert.equal(typeof jestAdapter.defineAnnotationProject, 'function');
-const jestAnnotations = jestAdapter.defineAnnotationProject();
+const jestAnnotations = jestAdapter.defineAnnotationProject({
+});
 assert.equal(
   jestAnnotations.globalTeardown,
   '@integration-testing/testcontainers/jest/annotation-global-teardown',
 );
 const jestProject = jestAdapter.defineContainerProject({
   include: ['test/**/*.integration.test.ts'],
-  containers: { database: containers.postgreSql() },
+  containers: { database: containers.postgreSql({ isolation: 'dedicated' }) },
   application: {
     setup: './test/application.setup.ts',
     environment: {
@@ -285,6 +304,12 @@ assert.equal(
   jestProject.globalTeardown,
   '@integration-testing/testcontainers/jest/project-global-teardown',
 );
+const isolatedJestProject = jestAdapter.defineContainerProject({
+  include: ['test/**/*.integration.test.ts'],
+  containers: { database: containers.postgreSql({ isolation: 'dedicated' }) },
+  jest: { maxWorkers: 2 },
+});
+assert.equal(isolatedJestProject.maxWorkers, 2);
 assert.throws(
   () => require('@integration-testing/testcontainers/vitest'),
   (error) => error?.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED',
@@ -299,9 +324,9 @@ import { defineContainerProject as defineVitestContainerProject } from '@integra
 import { defineAnnotationProject as defineVitestAnnotationProject } from '@integration-testing/testcontainers/vitest';
 
 const containers = {
-  primaryDatabase: postgreSql(),
-  auditDatabase: postgreSql({ database: 'audit' }),
-  messages: rabbitMq(),
+  primaryDatabase: postgreSql({ isolation: 'dedicated' }),
+  auditDatabase: postgreSql({ isolation: 'dedicated', database: 'audit' }),
+  messages: rabbitMq({ isolation: 'shared' }),
 };
 
 defineVitestAnnotationProject({
@@ -325,6 +350,12 @@ defineVitestContainerProject({
   },
 });
 
+defineVitestContainerProject({
+  include: ['test/**/*.integration.test.ts'],
+  containers: { database: postgreSql({ isolation: 'dedicated' }) },
+  vitest: { maxWorkers: 2 },
+});
+
 defineJestContainerProject({
   include: ['test/**/*.integration.test.ts'],
   containers,
@@ -336,9 +367,15 @@ defineJestContainerProject({
   },
 });
 
+defineJestContainerProject({
+  include: ['test/**/*.integration.test.ts'],
+  containers: { database: postgreSql({ isolation: 'dedicated' }) },
+  jest: { maxWorkers: 2 },
+});
+
 defineVitestContainerProject({
   include: ['test/**/*.integration.test.ts'],
-  containers: { database: postgreSql() },
+  containers: { database: postgreSql({ isolation: 'shared' }) },
   application: {
     setup: './test/application.setup.ts',
     environment: {

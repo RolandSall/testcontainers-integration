@@ -9,6 +9,8 @@ export { injectedContainerProject, injectedContainerResources } from './injected
 export { discoverRequiredContainers } from './required-container-scanner.js';
 export type { RequiredContainerDiscoveryOptions } from './required-container-scanner.js';
 export { installVitestApplicationIntegrationTestSupport } from './install-vitest-application-integration-test-support.js';
+export { configureVitestContainerFileSupport } from './file-lifecycle.js';
+export type { VitestContainerFileSupportOptions } from './file-lifecycle.js';
 export {
   defineAnnotationProject,
   defineVitestAnnotationProject,

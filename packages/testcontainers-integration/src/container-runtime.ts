@@ -24,7 +24,7 @@ export interface ContainerRuntimeInstance {
 }
 
 /**
- * Owns one shared network and one started container per required named instance.
+ * Owns one network and one started container per required named instance.
  *
  * Concurrent and repeated `start()` calls reuse the same start promises. `stop()` is
  * idempotent and releases containers before their shared network.
@@ -119,14 +119,14 @@ export class ContainerRuntime {
   }
 
   private async startNetworkOnce(): Promise<ContainerNetwork> {
-    this.logger.info('runtime', 'creating shared container network');
+    this.logger.info('runtime', 'creating container network');
     try {
       const network = await this.networkFactory();
       this.network = network;
-      this.logger.info('runtime', 'shared container network is ready');
+      this.logger.info('runtime', 'container network is ready');
       return network;
     } catch (error) {
-      this.logger.error('runtime', 'shared container network failed to start', error);
+      this.logger.error('runtime', 'container network failed to start', error);
       throw error;
     }
   }
@@ -209,11 +209,11 @@ export class ContainerRuntime {
     this.network = undefined;
     if (activeNetwork !== undefined) {
       try {
-        this.logger.info('runtime', 'stopping shared container network');
+        this.logger.info('runtime', 'stopping container network');
         await activeNetwork.stop();
-        this.logger.info('runtime', 'shared container network stopped');
+        this.logger.info('runtime', 'container network stopped');
       } catch (error) {
-        this.logger.error('runtime', 'shared container network failed to stop', error);
+        this.logger.error('runtime', 'container network failed to stop', error);
         failures.push(error);
       }
     }

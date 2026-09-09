@@ -3,8 +3,7 @@ import type { SerializedAnnotationProject } from '../annotation-project.js';
 import type { ContainerResources, SerializableContainerResources } from '../container-resources.js';
 import { parseContainerProject, type SerializedContainerProject } from '../container-project.js';
 import { CONTAINER_PROJECT_CONTEXT_KEY } from '../project-context.js';
-import { CONTAINER_RESOURCES_CONTEXT_KEY } from './context-key.js';
-import { restoreProvidedContainerResources } from './provided-container-resources.js';
+import { currentVitestContainerResources } from './file-lifecycle.js';
 
 declare module 'vitest' {
   export interface ProvidedContext {
@@ -14,12 +13,12 @@ declare module 'vitest' {
   }
 }
 
-/** Reads serializable resources provided by global setup and restores typed lookup. */
+/** Returns the combined shared and dedicated resources for the active Vitest file. */
 export const injectedContainerResources = (): ContainerResources =>
-  restoreProvidedContainerResources(inject(CONTAINER_RESOURCES_CONTEXT_KEY));
+  currentVitestContainerResources();
 
-/** Reads the explicit project declaration transported by Vitest configuration. */
+/** Reads the explicit project declaration from Vitest context. */
 export const injectedContainerProject = (): SerializedContainerProject | undefined => {
-  const candidate: unknown = inject(CONTAINER_PROJECT_CONTEXT_KEY);
+  const candidate = inject(CONTAINER_PROJECT_CONTEXT_KEY) as unknown;
   return candidate === undefined ? undefined : parseContainerProject(candidate);
 };

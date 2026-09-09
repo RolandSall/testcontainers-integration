@@ -16,7 +16,11 @@
     "url": "https://github.com/RolandSall/testcontainers-integration/issues"
   },
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/vitest/file-setup.js",
+    "./dist/jest/file-setup.js",
+    "./dist/jest/file-setup.cjs"
+  ],
   "engines": { "node": ">=22.22" },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -46,6 +50,9 @@
     "./vitest/annotation-global-setup": {
       "import": "./dist/vitest/annotation-global-setup.js"
     },
+    "./vitest/file-setup": {
+      "import": "./dist/vitest/file-setup.js"
+    },
     "./jest": {
       "import": { "types": "./dist/types/esm/jest/index.d.ts", "default": "./dist/jest/index.js" },
       "require": { "types": "./dist/types/cjs/jest/index.d.ts", "default": "./dist/jest/index.cjs" }
@@ -65,11 +72,15 @@
     "./jest/annotation-global-teardown": {
       "import": "./dist/jest/annotation-global-teardown.js",
       "require": "./dist/jest/annotation-global-teardown.cjs"
+    },
+    "./jest/file-setup": {
+      "import": "./dist/jest/file-setup.js",
+      "require": "./dist/jest/file-setup.cjs"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
-    "build": "tsup src/index.ts src/container-resource-map.ts src/vitest/index.ts src/vitest/project-global-setup.ts src/vitest/annotation-global-setup.ts src/jest/index.ts src/jest/project-global-setup.ts src/jest/project-global-teardown.ts src/jest/annotation-global-setup.ts src/jest/annotation-global-teardown.ts --format esm,cjs --sourcemap --clean --splitting && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist/types/esm && bun ../../scripts/prepare-dual-types.ts",
+    "build": "tsup src/index.ts src/container-resource-map.ts src/vitest/index.ts src/vitest/project-global-setup.ts src/vitest/annotation-global-setup.ts src/vitest/file-setup.ts src/jest/index.ts src/jest/project-global-setup.ts src/jest/project-global-teardown.ts src/jest/annotation-global-setup.ts src/jest/annotation-global-teardown.ts src/jest/file-setup.ts --format esm,cjs --sourcemap --clean --splitting && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist/types/esm && bun ../../scripts/prepare-dual-types.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --passWithNoTests"
     ,"test-docker": "RUN_DOCKER_TESTS=true vitest run src/built-in-containers.docker.test.ts"

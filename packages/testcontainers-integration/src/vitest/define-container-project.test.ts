@@ -6,7 +6,10 @@ import { defineContainerProject } from './define-container-project.js';
 test('given concise Vitest options, when a project is defined, then library lifecycle glue is configured automatically', () => {
   const config = defineContainerProject({
     include: ['test/**/*.integration.test.ts'],
-    containers: { database: postgreSql(), messages: rabbitMq() },
+    containers: {
+      database: postgreSql({ isolation: 'dedicated' }),
+      messages: rabbitMq({ isolation: 'shared' }),
+    },
     application: {
       setup: './test/application.setup.ts',
       environment: {
@@ -20,12 +23,17 @@ test('given concise Vitest options, when a project is defined, then library life
   expect(config.test?.globalSetup).toEqual([
     '@integration-testing/testcontainers/vitest/project-global-setup',
   ]);
-  expect(config.test?.setupFiles).toEqual(['./test/application.setup.ts']);
+  expect(config.test?.setupFiles).toEqual([
+    '@integration-testing/testcontainers/vitest/file-setup',
+    './test/application.setup.ts',
+  ]);
+  expect(config.test?.sequence).toMatchObject({ setupFiles: 'list', hooks: 'stack' });
+  expect(config.test?.isolate).toBe(true);
   expect(config.test?.provide?.[CONTAINER_PROJECT_CONTEXT_KEY]).toEqual({
-    version: 1,
+    version: 2,
     containers: [
-      { name: 'database', kind: Container.PostgreSql, options: {} },
-      { name: 'messages', kind: Container.RabbitMq, options: {} },
+      { name: 'database', kind: Container.PostgreSql, isolation: 'dedicated', options: {} },
+      { name: 'messages', kind: Container.RabbitMq, isolation: 'shared', options: {} },
     ],
     environment: {
       DATABASE_URL: {
@@ -47,7 +55,7 @@ test('given an environment reference, when its name or property does not match t
   expect(() => {
     defineContainerProject({
       include: ['test/**/*.integration.test.ts'],
-      containers: { database: postgreSql() },
+      containers: { database: postgreSql({ isolation: 'shared' }) },
       application: {
         setup: './test/application.setup.ts',
         environment: {
@@ -59,4 +67,26 @@ test('given an environment reference, when its name or property does not match t
       },
     });
   }).toThrow('Container project environment references an unknown container: primaryDatabase');
+});
+
+test('runner worker settings are preserved and are not derived from container isolation', () => {
+  const config = defineContainerProject({
+    include: ['test/**/*.integration.test.ts'],
+    containers: { database: postgreSql({ isolation: 'dedicated' }) },
+    vitest: { maxWorkers: 7 },
+  });
+
+  expect(config.test?.maxWorkers).toBe(7);
+  expect(config.test?.provide?.[CONTAINER_PROJECT_CONTEXT_KEY]).toMatchObject({
+    version: 2,
+    containers: [{ name: 'database', isolation: 'dedicated' }],
+  });
+});
+
+test('Vitest isolate false is rejected because file state would be unsafe', () => {
+  expect(() => defineContainerProject({
+    include: ['test/**/*.integration.test.ts'],
+    containers: { database: postgreSql({ isolation: 'dedicated' }) },
+    vitest: { isolate: false },
+  } as never)).toThrow('Vitest isolate: false is not supported');
 });

@@ -4,8 +4,8 @@ import { defineContainerProject } from '@integration-testing/testcontainers/jest
 export default defineContainerProject({
   include: ['**/test/**/*.integration.test.ts'],
   containers: {
-    database: postgreSql(),
-    messages: rabbitMq(),
+    database: postgreSql({ isolation: 'dedicated' }),
+    messages: rabbitMq({ isolation: 'shared' }),
   },
   application: {
     setup: './test/application.setup.ts',

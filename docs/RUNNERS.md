@@ -2,7 +2,7 @@
 
 ## Annotation mode
 
-Both adapters can configure built-in annotation discovery without consumer-owned global setup files:
+Both adapters configure built-in annotation discovery without consumer-owned global setup files:
 
 ```ts
 import { defineAnnotationProject } from '@integration-testing/testcontainers/vitest';
@@ -11,16 +11,30 @@ export default defineAnnotationProject({
   application: './test/application.vitest.setup.ts',
   hookTimeout: 360_000,
   testTimeout: 30_000,
+  vitest: { maxWorkers: 2 },
 });
 ```
 
-Import the Jest variant from `@integration-testing/testcontainers/jest` and pass ordinary Jest
-options through its `jest` property. The helper owns scanner setup and container teardown. Use the
-lower-level global lifecycle API when annotation discovery needs a custom container registry.
+Every matched file declares exactly one named marker:
+
+```ts
+@RequiredContainer({
+  messages: { kind: Container.RabbitMq, isolation: 'shared' },
+  primaryDatabase: { kind: Container.PostgreSql, isolation: 'dedicated' },
+  auditDatabase: { kind: Container.PostgreSql, isolation: 'dedicated' },
+})
+@ApplicationIntegrationTest
+class OrderIntegrationTest {}
+```
+
+Import the Jest helper from `@integration-testing/testcontainers/jest` and pass ordinary Jest
+options through its `jest` property. The helper owns scanner setup, internal file hooks, and
+container teardown. Use the lower-level global and file lifecycle APIs when annotation discovery
+needs a custom container registry.
 
 ## Project configuration mode
 
-Both adapters can own their setup and teardown from one serializable declaration:
+Both adapters can own setup and teardown from one serializable declaration:
 
 ```ts
 import { fromContainer, postgreSql, rabbitMq } from '@integration-testing/testcontainers';
@@ -28,72 +42,79 @@ import { defineContainerProject } from '@integration-testing/testcontainers/vite
 
 export default defineContainerProject({
   include: ['test/**/*.integration.test.ts'],
-  containers: { database: postgreSql(), messages: rabbitMq() },
+  containers: {
+    messages: rabbitMq({ isolation: 'shared' }),
+    primaryDatabase: postgreSql({ isolation: 'dedicated' }),
+    auditDatabase: postgreSql({ isolation: 'dedicated' }),
+  },
   application: {
     setup: './test/application.setup.ts',
     environment: {
-      DATABASE_URL: fromContainer('database', 'connectionUri'),
       RABBITMQ_URL: fromContainer('messages', 'amqpUrl'),
+      DATABASE_URL: fromContainer('primaryDatabase', 'connectionUri'),
+      AUDIT_DATABASE_URL: fromContainer('auditDatabase', 'connectionUri'),
     },
   },
+  vitest: { maxWorkers: 2 },
 });
 ```
 
-Import the Jest variant from `@integration-testing/testcontainers/jest`. Both variants use the same
-`ContainerRuntime`, resources, application contract, and reverse-order cleanup as annotation
-mode. Keep explicit and annotation discovery in separate runner projects.
+Import the Jest variant from `@integration-testing/testcontainers/jest`. Both variants use the
+same runtime, named resources, application contract, and reverse-order cleanup. Keep project
+configuration and annotation discovery in separate runner projects.
 
 ## Vitest
 
-Vitest `globalSetup` discovers requirements and starts one shared runtime. It transfers only
-serializable resources through `project.provide`. `setupFiles` registers file-level application
-hooks, and `inject` restores typed resources in the worker.
+Vitest global setup starts only shared declarations and transfers their serializable resources
+through `project.provide`. The package inserts its internal file setup before the consumer's
+application setup and forces setup files to run in list order. The internal `beforeAll` lazily
+starts the file's dedicated declarations and makes the merged resources available to tests and
+later hooks.
 
-In project configuration mode the package-owned global setup reads the serialized project declaration instead
-of scanning test source. Named environment bindings are resolved after startup and installed
-before worker setup files load. Existing values are restored during teardown.
-
-`vitest.integration.config.ts` is consumer configuration, not library runtime code. It tells
-Vitest which test files, global setup, and setup modules belong to the integration project.
-Unit-test configuration should remain separate so unit tests never start Docker.
+The helper keeps Vitest module isolation enabled and rejects `isolate: false`. It preserves
+`vitest.maxWorkers` and does not rewrite command-line worker options.
 
 ## Jest
 
-Jest 30 uses `globalSetup` and `globalTeardown` for the shared runtime. Jest cannot directly
-share global-setup values with test suites. The adapter writes resources to a generated
-permission-restricted temporary JSON file and exposes only its path to workers.
-`setupFilesAfterEnv` restores resources and registers application hooks.
+Jest 30 uses `globalSetup` and `globalTeardown` for shared resources. Jest cannot directly share
+global-setup values with test suites, so the adapter writes only serializable resources to a
+permission-restricted temporary JSON file and exposes its path to test processes.
+`setupFilesAfterEnv` installs the package's file hook before the consumer application setup. The
+file hook owns dedicated startup, merged resource access, application shutdown, and file cleanup.
 
-In both annotation and project configuration modes, package-owned global setup and teardown are configured automatically.
-Runner-specific transforms remain the consumer's responsibility and can be passed through the
-`jest` property.
+Runner transforms remain the consumer's responsibility and can be passed through the `jest`
+property. `jest.maxWorkers` and command-line worker settings are preserved.
+
+## Resource timing
+
+`injectedContainerResources()` is available from consumer `beforeAll`, tests, and later hooks.
+Calling it during module collection fails with an actionable error because dedicated resources do
+not exist until the package-owned `beforeAll` runs.
 
 ## IDE execution
 
-Configure the IDE runner to use the same integration config file used by the command line.
-Running an individual annotated file without its global setup cannot work because no owner has
-started its containers. In WebStorm, select the Vitest or Jest configuration file in the run
-configuration rather than relying on automatic project discovery.
-
-The repository root and the Vitest annotation example both have a default-named `vitest.config.ts`
-fallback. Together they support gutter runs whether WebStorm chooses the workspace or package as
-its working directory. They are IDE conveniences for this checkout, not replacements for the
-dedicated integration config that consuming applications should own.
+Configure the IDE runner to use the same integration config used by the command line. Running an
+individual annotated file without its global setup cannot work because no owner has started its
+shared containers. In WebStorm, select the Vitest or Jest configuration file rather than relying
+on automatic project discovery.
 
 ## Cucumber and other runners
 
-Cucumber does not need a package-specific adapter. Start `ContainerRuntime` or
-`IntegrationEnvironment` in the global Cucumber lifecycle and stop it in the matching teardown.
-Keep scenario state in the World and keep infrastructure ownership in the environment.
+Cucumber and Node's test runner can use `ContainerRuntime` or `IntegrationEnvironment` directly in
+their global hooks. File-dedicated lifecycle automation is currently provided by the Jest and
+Vitest adapters; another runner can model the same ownership with one runtime per file or scenario.
 
 ## Scope choices
 
-| Desired scope | API | Result |
+| Desired scope | Configuration | Result |
 | --- | --- | --- |
-| One command | Vitest or Jest global adapter | Shared across all discovered files |
-| One suite | New `ContainerRuntime` in suite hooks | Shared inside that suite only |
-| One Cucumber execution | New runtime in global Cucumber hooks | Shared by scenarios |
-| Multiple isolated instances | Give each project container a distinct name | Separate adapters and named resources |
+| Shared service | `rabbitMq({ isolation: 'shared' })` | One named RabbitMQ instance and global network for all declaring files |
+| File-dedicated service | `postgreSql({ isolation: 'dedicated' })` | One named PostgreSQL instance per matched file |
+| Multiple databases | Use distinct keys such as `primaryDatabase` and `auditDatabase` | Independent typed resources and name-based environment bindings |
+| One direct suite | Create `ContainerRuntime` in suite hooks | Infrastructure owned by that suite |
+| One Cucumber execution | Create a runtime in global Cucumber hooks | Infrastructure shared by scenarios |
 
-Per-test container startup and cross-command reuse are deferred. Database isolation should
-normally use transactions, schemas, or databases on top of a run-scoped server container.
+Dedicated isolation is per file, not per test. Tests within one file still need transactions,
+unique data, or cleanup for shared mutable state. More concurrently executing files can start more
+dedicated containers, so the runner's worker count remains the developer's explicit capacity
+control.

@@ -6,7 +6,9 @@ import {
 import { expect, test } from 'vitest';
 import { applicationContext } from './application.setup.js';
 
-@RequiredContainer(Container.SqlServer)
+@RequiredContainer({
+  database: { kind: Container.SqlServer, isolation: 'shared' },
+})
 @ApplicationIntegrationTest
 export class AnnotatedVitestIntegrationTest {}
 

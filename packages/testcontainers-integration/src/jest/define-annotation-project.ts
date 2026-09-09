@@ -1,41 +1,46 @@
 import type { Config } from 'jest';
+import type { AnnotationProjectApplication } from '../annotation-project.js';
 import { serializeAnnotationProject } from '../annotation-project.js';
 import { ANNOTATION_PROJECT_CONTEXT_KEY } from '../project-context.js';
 
-/** Concise annotation-discovery configuration for a Jest integration project. */
 export interface JestAnnotationProjectOptions {
   readonly include?: readonly string[];
-  readonly application?: string;
+  readonly application?: string | AnnotationProjectApplication;
   readonly testFileSuffix?: string;
-  /** Streams raw container output. Disabled by default. */
   readonly containerLogs?: boolean;
-  /** Runner-specific options such as ts-jest transform configuration. */
   readonly jest?: Omit<
     Config,
     'testMatch' | 'globalSetup' | 'globalTeardown' | 'setupFilesAfterEnv' | 'globals'
   >;
 }
 
-/** Defines a complete built-in annotation project without consumer-owned global setup. */
+/** Defines a Jest annotation project with per-container file isolation. */
 export const defineAnnotationProject = (
   options: JestAnnotationProjectOptions = {},
-): Config => ({
-  ...options.jest,
-  testMatch: [...(options.include ?? ['**/*.container.integration.test.ts'])],
-  globalSetup:
-    '@integration-testing/testcontainers/jest/annotation-global-setup',
-  globalTeardown:
-    '@integration-testing/testcontainers/jest/annotation-global-teardown',
-  ...(options.application === undefined
-    ? {}
-    : { setupFilesAfterEnv: [options.application] }),
-  globals: {
-    [ANNOTATION_PROJECT_CONTEXT_KEY]: serializeAnnotationProject(
-      options.testFileSuffix,
-      options.containerLogs,
-    ),
-  },
-});
+): Config => {
+  const applicationSetup = typeof options.application === 'string'
+    ? options.application
+    : options.application?.setup;
+  const environment = typeof options.application === 'object'
+    ? options.application.environment
+    : undefined;
+  return {
+    ...options.jest,
+    testMatch: [...(options.include ?? ['**/*.container.integration.test.ts'])],
+    globalSetup: '@integration-testing/testcontainers/jest/annotation-global-setup',
+    globalTeardown: '@integration-testing/testcontainers/jest/annotation-global-teardown',
+    setupFilesAfterEnv: [
+      '@integration-testing/testcontainers/jest/file-setup',
+      ...(applicationSetup === undefined ? [] : [applicationSetup]),
+    ],
+    globals: {
+      [ANNOTATION_PROJECT_CONTEXT_KEY]: serializeAnnotationProject(
+        options.testFileSuffix,
+        options.containerLogs,
+        environment,
+      ),
+    },
+  };
+};
 
-/** Explicit runner-qualified alias for mixed-runner documentation and tooling. */
 export const defineJestAnnotationProject = defineAnnotationProject;

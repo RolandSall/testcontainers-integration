@@ -60,8 +60,8 @@ dockerTest(
   async () => {
     const project = serializeContainerProject(
       {
-        primaryDatabase: postgreSql({ database: 'primary_app' }),
-        auditDatabase: postgreSql({ database: 'audit_app' }),
+        primaryDatabase: postgreSql({ isolation: 'dedicated', database: 'primary_app' }),
+        auditDatabase: postgreSql({ isolation: 'dedicated', database: 'audit_app' }),
       },
       {
         DATABASE_URL: fromContainer('primaryDatabase', 'connectionUri'),

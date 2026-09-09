@@ -8,7 +8,9 @@ import {
   testApiApplicationContext,
 } from './application-integration-test.setup.test-helper.js';
 
-@RequiredContainer(Container.SqlServer)
+@RequiredContainer({
+  database: { kind: Container.SqlServer, isolation: 'shared' },
+})
 @ApplicationIntegrationTest
 export class CandidateApiIntegrationTest {}
 

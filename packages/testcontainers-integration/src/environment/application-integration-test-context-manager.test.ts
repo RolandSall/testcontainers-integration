@@ -30,13 +30,15 @@ test(
       },
     });
 
-    @RequiredContainer(Container.SqlServer)
+    @RequiredContainer({
+      database: { kind: Container.SqlServer, isolation: 'shared' },
+    })
     @ApplicationIntegrationTest
     class CandidateApiIntegrationTest {}
 
     await contextManager.start(
       CandidateApiIntegrationTest,
-      new ContainerResources([sqlServer]),
+      ContainerResources.fromNamed([['database', sqlServer]]),
     );
     expect(contextManager.current()).toEqual({ port: 14_333 });
     await contextManager.stop();

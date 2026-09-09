@@ -6,11 +6,11 @@ import {
 import { expect, test } from 'vitest';
 import { applicationContext } from './application.vitest.setup.js';
 
-@RequiredContainer([
-  Container.RabbitMq,
-  Container.PostgreSql,
-  Container.SqlServer,
-])
+@RequiredContainer({
+  messages: { kind: Container.RabbitMq, isolation: 'shared' },
+  database: { kind: Container.PostgreSql, isolation: 'dedicated' },
+  sqlServer: { kind: Container.SqlServer, isolation: 'dedicated' },
+})
 @ApplicationIntegrationTest
 export class ExampleApplicationIntegrationTest {}
 

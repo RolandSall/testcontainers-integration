@@ -6,7 +6,10 @@ import {
 } from '@integration-testing/testcontainers';
 import { applicationContext } from './application.jest.setup.js';
 
-@RequiredContainer([Container.RabbitMq, Container.PostgreSql])
+@RequiredContainer({
+  messages: { kind: Container.RabbitMq, isolation: 'shared' },
+  database: { kind: Container.PostgreSql, isolation: 'dedicated' },
+})
 @ApplicationIntegrationTest
 export class ExampleApplicationIntegrationTest {}
 

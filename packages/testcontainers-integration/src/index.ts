@@ -1,4 +1,5 @@
 export type { ContainerResource } from './container-contract.js';
+export type { ContainerIsolation } from './container-isolation.js';
 export { Container } from './container-kind.js';
 export { defineContainerCatalog } from './container-catalog.js';
 export type { ContainerCatalog } from './container-catalog.js';
@@ -31,7 +32,12 @@ export type {
   GenericContainerResource,
 } from './generic/generic-container-resource.js';
 export { RequiredContainer, requiredContainersFor } from './required-container.js';
-export type { IntegrationTestClass } from './required-container.js';
+export type {
+  IntegrationTestClass,
+  RequiredContainerDefinition,
+  RequiredContainerDefinitions,
+  RequiredContainerInstance,
+} from './required-container.js';
 export {
   ApplicationIntegrationTest,
   isApplicationIntegrationTest,

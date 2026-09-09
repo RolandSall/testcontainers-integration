@@ -1,16 +1,29 @@
-import type { SerializedContainerProject } from './container-project.js';
+import type {
+  ContainerEnvironmentReference,
+  SerializedContainerProject,
+} from './container-project.js';
 import type { ContainerResources } from './container-resources.js';
+import type { ContainerKind } from './container-resource-map.js';
 
 /** Resolves declared environment bindings without exposing or logging their values. */
 export const resolveContainerProjectEnvironment = (
   project: SerializedContainerProject,
   resources: ContainerResources,
+): Readonly<Record<string, string>> => resolveContainerEnvironment(
+  project.containers,
+  project.environment,
+  resources,
+);
+
+/** Resolves bindings against one file's named declarations and selected resources. */
+export const resolveContainerEnvironment = (
+  declarations: readonly Readonly<{ name: string; kind: ContainerKind }>[],
+  environment: Readonly<Record<string, ContainerEnvironmentReference>> | undefined,
+  resources: ContainerResources,
 ): Readonly<Record<string, string>> => {
-  const containers = new Map(
-    project.containers.map((container) => [container.name, container] as const),
-  );
+  const containers = new Map(declarations.map((container) => [container.name, container] as const));
   return Object.fromEntries(
-    Object.entries(project.environment ?? {}).map(([variable, reference]) => {
+    Object.entries(environment ?? {}).map(([variable, reference]) => {
       const declaration = containers.get(reference.container);
       if (declaration === undefined) {
         throw new Error(
