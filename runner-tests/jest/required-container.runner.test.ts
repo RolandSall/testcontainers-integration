@@ -6,7 +6,9 @@ import {
 } from '@integration-testing/testcontainers';
 import { applicationContext } from './application.setup';
 
-@RequiredContainer(Container.SqlServer)
+@RequiredContainer({
+  database: { kind: Container.SqlServer, isolation: 'shared' },
+})
 @ApplicationIntegrationTest
 export class AnnotatedJestIntegrationTest {}
 

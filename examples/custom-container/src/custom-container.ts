@@ -66,5 +66,8 @@ export const registry = createDefaultContainerRegistry()
 
 const Container = containerCatalog;
 
-@RequiredContainer([Container.RedisPrimary, Container.RedisReplica])
+@RequiredContainer({
+  'redis-primary': { kind: Container.RedisPrimary, isolation: 'shared' },
+  'redis-replica': { kind: Container.RedisReplica, isolation: 'shared' },
+})
 export class RedisReplicationIntegrationTest {}

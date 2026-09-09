@@ -10,8 +10,8 @@ import type { PostgreSqlResource } from './postgresql/postgresql-resource.js';
 
 test('given two PostgreSQL instances, when environment is resolved, then each variable uses its named mapped resource', () => {
   const containers = {
-    primary: postgreSql(),
-    audit: postgreSql(),
+    primary: postgreSql({ isolation: 'dedicated' }),
+    audit: postgreSql({ isolation: 'dedicated' }),
   };
   const project = serializeContainerProject(containers, {
     DATABASE_URL: fromContainer('primary', 'connectionUri'),

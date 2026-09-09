@@ -3,10 +3,6 @@ import {
   createContainerProjectRegistry,
   parseContainerProject,
 } from '../container-project.js';
-import {
-  installProcessEnvironment,
-  resolveContainerProjectEnvironment,
-} from '../container-environment.js';
 import { CONTAINER_PROJECT_CONTEXT_KEY } from '../project-context.js';
 import {
   createVitestContainerGlobalSetup,
@@ -28,16 +24,10 @@ export const setup = async (project: ConfiguredVitestProject): Promise<void> => 
   lifecycle = createVitestContainerGlobalSetup({
     root: project.config.root,
     registry: createContainerProjectRegistry(containerProject),
-    requiredContainerInstances: containerProjectInstances(containerProject),
+    requiredContainerInstances: containerProjectInstances(containerProject, 'shared'),
     ...(containerProject.containerLogs === undefined
       ? {}
       : { containerLogs: containerProject.containerLogs }),
-    prepareResources: (resources) => {
-      const restoreEnvironment = installProcessEnvironment(
-        resolveContainerProjectEnvironment(containerProject, resources),
-      );
-      return Promise.resolve(restoreEnvironment);
-    },
   });
   await lifecycle.setup(project);
 };

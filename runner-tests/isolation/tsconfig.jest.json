@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "paths": {
+      "@integration-testing/testcontainers": ["packages/testcontainers-integration/src/index.ts"],
+      "@integration-testing/testcontainers/jest": ["packages/testcontainers-integration/src/jest/index.ts"]
+    },
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "isolatedModules": false,
+    "types": ["node", "jest"]
+  },
+  "include": ["jest/**/*.ts", "jest.*.config.ts"]
+}

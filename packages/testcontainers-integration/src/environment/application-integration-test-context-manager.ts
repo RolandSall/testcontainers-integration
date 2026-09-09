@@ -1,72 +1,69 @@
 import type { ApplicationIntegrationTestClass } from '../application-integration-test.js';
 import type { ContainerResources } from '../container-resources.js';
 import type { ContainerKind } from '../container-resource-map.js';
+import type { ContainerRuntimeInstance } from '../container-runtime.js';
 import { requiredContainersFor } from '../required-container.js';
 import type { ApplicationIntegrationTestContextAccessor } from './application-integration-test-context-accessor.js';
 import type { ApplicationLifecycle } from './application-lifecycle.js';
-import { IntegrationEnvironment } from './integration-environment.js';
-import { ProvidedContainerSource } from './provided-container-source.js';
 
-/**
- * Runner-neutral manager that starts one application for an annotated test file.
- *
- * Runner adapters discover the marker and translate their hooks into `start()` and `stop()`.
- */
+/** Starts one application with an already prepared named resource collection. */
 export class ApplicationIntegrationTestContextManager<TApplication>
   implements ApplicationIntegrationTestContextAccessor<TApplication>
 {
-  private environment: IntegrationEnvironment<TApplication> | undefined;
+  private applicationInstance: TApplication | undefined;
+  private starting = false;
 
-  /** Creates a manager for the application lifecycle installed by the consumer. */
   constructor(private readonly application: ApplicationLifecycle<TApplication>) {}
 
-  /** Validates requirements and starts the application with already-running resources. */
   async start(
     testClass: ApplicationIntegrationTestClass,
     resources: ContainerResources,
   ): Promise<void> {
-    if (this.environment !== undefined) {
-      throw new Error('Application integration-test context has already started');
-    }
     const requiredContainers = requiredContainersFor(testClass);
     if (requiredContainers.length === 0) {
-      throw new Error(
-        '@ApplicationIntegrationTest requires @RequiredContainer(...) on the same class',
-      );
+      throw new Error('@ApplicationIntegrationTest requires @RequiredContainer(...) on the same class');
     }
-    await this.startFor(requiredContainers, resources);
+    await this.startForInstances(requiredContainers, resources);
   }
 
-  /** Starts the application for an explicit project without decorator metadata. */
   async startFor(
     requiredContainers: readonly ContainerKind[],
     resources: ContainerResources,
   ): Promise<void> {
-    if (this.environment !== undefined) {
-      throw new Error('Application integration-test context has already started');
-    }
-    const environment = new IntegrationEnvironment({
-      requiredContainers,
-      containers: new ProvidedContainerSource(resources),
-      application: this.application,
-    });
-    this.environment = environment;
-    await environment.start();
+    for (const kind of requiredContainers) resources.get(kind);
+    await this.startApplication(resources);
   }
 
-  /** Returns the application started for the active annotated test file. */
+  async startForInstances(
+    requiredContainers: readonly ContainerRuntimeInstance[],
+    resources: ContainerResources,
+  ): Promise<void> {
+    for (const { name, kind } of requiredContainers) resources.getNamed(name, kind);
+    await this.startApplication(resources);
+  }
+
   current(): TApplication {
-    const activeEnvironment = this.environment;
-    if (activeEnvironment === undefined) {
+    if (this.applicationInstance === undefined) {
       throw new Error('Application integration-test context is not active');
     }
-    return activeEnvironment.current().application;
+    return this.applicationInstance;
   }
 
-  /** Stops the active application and clears the file-level context. */
   async stop(): Promise<void> {
-    const activeEnvironment = this.environment;
-    this.environment = undefined;
-    await activeEnvironment?.stop();
+    const application = this.applicationInstance;
+    this.applicationInstance = undefined;
+    if (application !== undefined) await this.application.stop(application);
+  }
+
+  private async startApplication(resources: ContainerResources): Promise<void> {
+    if (this.applicationInstance !== undefined || this.starting) {
+      throw new Error('Application integration-test context has already started');
+    }
+    this.starting = true;
+    try {
+      this.applicationInstance = await this.application.start(resources);
+    } finally {
+      this.starting = false;
+    }
   }
 }

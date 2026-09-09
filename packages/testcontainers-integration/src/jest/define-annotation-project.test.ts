@@ -18,12 +18,21 @@ test('given annotation options, when a Jest project is defined, then scanner lif
     '@integration-testing/testcontainers/jest/annotation-global-teardown',
   );
   expect(config.setupFilesAfterEnv).toEqual([
+    '@integration-testing/testcontainers/jest/file-setup',
     './test/application.jest.setup.ts',
   ]);
   expect(config.globals?.[ANNOTATION_PROJECT_CONTEXT_KEY]).toEqual({
-    version: 1,
+    version: 2,
     testFileSuffix: '.container.integration.test.ts',
     containerLogs: true,
   });
   expect(config.testTimeout).toBe(30_000);
+});
+
+test('annotation projects preserve the configured Jest worker count', () => {
+  const config = defineAnnotationProject({
+    jest: { maxWorkers: 9 },
+  });
+
+  expect(config.maxWorkers).toBe(9);
 });

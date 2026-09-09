@@ -40,7 +40,7 @@ class FakeNetwork implements ContainerNetwork {
 
 export const lifecycle = createJestContainerGlobalSetup({
   root: resolve(process.cwd(), 'runner-tests/jest'),
-  testFileSuffix: '.runner.test.ts',
+  testFileSuffix: 'required-container.runner.test.ts',
   registry: new ContainerRegistry().register(
     Container.SqlServer,
     () => new FakeSqlServerContainer(),

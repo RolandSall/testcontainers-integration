@@ -6,7 +6,7 @@ test(
   'given Vitest global setup was omitted, when worker resources are restored, then the error explains how to configure the test',
   () => {
     expect(() => restoreProvidedContainerResources(undefined)).toThrow(
-      'Vitest container resources were not provided. Run this test with the integration Vitest config and register createVitestContainerGlobalSetup(...) in test.globalSetup.',
+      'Vitest container resources were not provided. Configure the integration project global setup.',
     );
   },
 );

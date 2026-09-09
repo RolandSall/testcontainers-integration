@@ -6,7 +6,10 @@ import { defineContainerProject } from './define-container-project.js';
 test('given concise Jest options, when a project is defined, then library setup and teardown are configured automatically', () => {
   const config = defineContainerProject({
     include: ['**/test/**/*.integration.test.ts'],
-    containers: { database: postgreSql(), messages: rabbitMq() },
+    containers: {
+      database: postgreSql({ isolation: 'dedicated' }),
+      messages: rabbitMq({ isolation: 'shared' }),
+    },
     application: {
       setup: './test/application.setup.ts',
       environment: {
@@ -19,12 +22,15 @@ test('given concise Jest options, when a project is defined, then library setup 
 
   expect(config.globalSetup).toBe('@integration-testing/testcontainers/jest/project-global-setup');
   expect(config.globalTeardown).toBe('@integration-testing/testcontainers/jest/project-global-teardown');
-  expect(config.setupFilesAfterEnv).toEqual(['./test/application.setup.ts']);
+  expect(config.setupFilesAfterEnv).toEqual([
+    '@integration-testing/testcontainers/jest/file-setup',
+    './test/application.setup.ts',
+  ]);
   expect(config.globals?.[CONTAINER_PROJECT_CONTEXT_KEY]).toEqual({
-    version: 1,
+    version: 2,
     containers: [
-      { name: 'database', kind: Container.PostgreSql, options: {} },
-      { name: 'messages', kind: Container.RabbitMq, options: {} },
+      { name: 'database', kind: Container.PostgreSql, isolation: 'dedicated', options: {} },
+      { name: 'messages', kind: Container.RabbitMq, isolation: 'shared', options: {} },
     ],
     environment: {
       DATABASE_URL: {
@@ -38,5 +44,19 @@ test('given concise Jest options, when a project is defined, then library setup 
         property: 'amqpUrl',
       },
     },
+  });
+});
+
+test('runner worker settings are preserved and are not derived from container isolation', () => {
+  const config = defineContainerProject({
+    include: ['**/test/**/*.integration.test.ts'],
+    containers: { database: postgreSql({ isolation: 'dedicated' }) },
+    jest: { maxWorkers: 9 },
+  });
+
+  expect(config.maxWorkers).toBe(9);
+  expect(config.globals?.[CONTAINER_PROJECT_CONTEXT_KEY]).toMatchObject({
+    version: 2,
+    containers: [{ name: 'database', isolation: 'dedicated' }],
   });
 });

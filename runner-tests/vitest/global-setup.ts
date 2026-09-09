@@ -37,7 +37,7 @@ class FakeNetwork implements ContainerNetwork {
 
 const lifecycle = createVitestContainerGlobalSetup({
   root: import.meta.dirname,
-  testFileSuffix: '.runner.test.ts',
+  testFileSuffix: 'required-container.runner.test.ts',
   registry: new ContainerRegistry().register(
     Container.SqlServer,
     () => new FakeSqlServerContainer(),

@@ -2,7 +2,7 @@
 
 Minimal, typed Testcontainers lifecycle management for NestJS and other Node.js backends using Vitest, Jest, or a custom test runner.
 
-Declare the infrastructure each integration test needs beside the test itself. The library starts each container once, gives your application typed connection details, and always stops the application before tearing down its containers and network.
+Declare the infrastructure each integration test needs beside the test itself. The library starts shared containers once, creates dedicated containers for each test file that requests them, gives the file's application typed connection details, and cleans up each lifecycle in ownership order.
 
 ```ts
 import {
@@ -11,7 +11,11 @@ import {
   RequiredContainer,
 } from '@integration-testing/testcontainers';
 
-@RequiredContainer([Container.RabbitMq, Container.PostgreSql])
+@RequiredContainer({
+  messages: { kind: Container.RabbitMq, isolation: 'shared' },
+  primaryDatabase: { kind: Container.PostgreSql, isolation: 'dedicated' },
+  auditDatabase: { kind: Container.PostgreSql, isolation: 'dedicated' },
+})
 @ApplicationIntegrationTest
 export class OrderApplicationIntegrationTest {}
 ```
@@ -24,14 +28,105 @@ Both modes use the same containers, typed resources, application lifecycle, and 
 
 | Mode | Syntax | Best fit | Tradeoff |
 | --- | --- | --- | --- |
-| Annotation mode | `@RequiredContainer([Container.PostgreSql, ...])` | Teams that want each test file to declare its own infrastructure requirements | Requires `experimentalDecorators` and the scanner lifecycle settings shown below |
+| Annotation mode | `@RequiredContainer({ database: { kind, isolation } })` | Teams that want each test file to declare its own infrastructure requirements | Requires `experimentalDecorators` and the scanner lifecycle settings shown below |
 | Project configuration | `defineContainerProject({ containers: ... })` | Developers who prefer one explicit, central runner configuration instead of annotations | Every container requirement is declared in the config rather than beside a test |
 
 This guide starts with annotation mode. If annotations are not your preference, use the project configuration mode shown second. Do not combine both modes in the same Jest or Vitest project; use separate runner configs when a repository uses both.
 
+## Use shared and dedicated containers
+
+Every named container requires one explicit isolation value:
+
+| Isolation | Behavior |
+| --- | --- |
+| `'shared'` | One instance is started globally and reused by every matching test file that declares the same name and kind as shared. |
+| `'dedicated'` | Every test file receives its own instance. All dedicated containers in that file share one private network. |
+
+Use `shared` for infrastructure that can safely serve multiple test files, such as a RabbitMQ instance where each file uses unique queue, exchange, and routing-key names. Use `dedicated` when a file should own its mutable state or database schema without affecting other files.
+
+In annotation mode, put the isolation choice beside every named container:
+
+```ts
+import {
+  ApplicationIntegrationTest,
+  Container,
+  RequiredContainer,
+} from '@integration-testing/testcontainers';
+
+@RequiredContainer({
+  messages: {
+    kind: Container.RabbitMq,
+    isolation: 'shared',
+  },
+  primaryDatabase: {
+    kind: Container.PostgreSql,
+    isolation: 'dedicated',
+  },
+  auditDatabase: {
+    kind: Container.PostgreSql,
+    isolation: 'dedicated',
+  },
+})
+@ApplicationIntegrationTest
+export class OrderApplicationIntegrationTest {}
+```
+
+Every annotation test file declaring `messages` with the same name, kind, and `shared` isolation receives the same RabbitMQ instance. Each file receives its own `primaryDatabase` and `auditDatabase` instances because those declarations are `dedicated`.
+
+Isolation belongs to the container, so one file can share RabbitMQ while receiving two independent PostgreSQL databases. Jest and Vitest still control how many workers run. The library does not change `maxWorkers` and does not use worker identifiers to select resources.
+
+Dedicated means dedicated per test file, not per individual test. Tests inside one file share that file's containers and application. They still need transactions, unique data, or cleanup when they mutate the same state concurrently. This setting is unrelated to Testcontainers' cross-run container reuse feature.
+
+Database transaction isolation is currently the developer's responsibility. Choose an approach that fits the test, such as a transaction per test, unique test data, explicit cleanup, or a dedicated container. This package controls container and application lifecycles, but it does not automatically wrap application database operations in a rollback-only transaction.
+
+Automatic rollback-based data isolation is being developed separately in [`data-integration-testing`](https://github.com/RolandSall/data-integration-testing). That library is still a work in progress and is not bundled with or required by this package.
+
+In project configuration mode, put the same isolation choice in each container factory. The configuration applies to every file matched by `include`:
+
+```ts
+import { fromContainer, postgreSql, rabbitMq } from '@integration-testing/testcontainers';
+import { defineContainerProject } from '@integration-testing/testcontainers/vitest';
+
+export default defineContainerProject({
+  include: ['test/**/*.integration.test.ts'],
+  containers: {
+    messages: rabbitMq({ isolation: 'shared' }),
+    primaryDatabase: postgreSql({ isolation: 'dedicated' }),
+    auditDatabase: postgreSql({ isolation: 'dedicated' }),
+  },
+  application: {
+    setup: './test/application.setup.ts',
+    environment: {
+      RABBITMQ_URL: fromContainer('messages', 'amqpUrl'),
+      DATABASE_URL: fromContainer('primaryDatabase', 'connectionUri'),
+      AUDIT_DATABASE_URL: fromContainer('auditDatabase', 'connectionUri'),
+    },
+  },
+  vitest: { maxWorkers: 2 },
+});
+```
+
+With two files running together, both applications receive the same RabbitMQ mapped port and different primary and audit PostgreSQL ports. A dedicated container is started lazily when its file begins, so increasing the runner's worker count can increase concurrent Docker load. Configure Vitest with `vitest: { maxWorkers }`, configure Jest with `jest: { maxWorkers }`, or keep your existing runner setting. Command-line worker overrides remain runner-owned and are not rewritten by the library.
+
+Shared and dedicated containers use different Docker networks. The supported mixed model is a host-side SUT connecting through mapped ports. Direct container-to-container communication between the shared and dedicated networks is not supported.
+
+If dedicated startup, preparation, environment resolution, or application bootstrap fails, the file immediately restores its environment and stops every file-owned container and network that started. The application `stop` callback runs only after `start` returned an application instance. Shared containers remain owned by global teardown, which stops all of them even when the test run fails normally.
+
+### Failure path when the runner is terminated
+
+A hung bootstrap followed by a forced runner termination is different from a rejected bootstrap. After `SIGKILL`, Node.js cannot run `catch`, `finally`, application `stop`, file cleanup, or global teardown. In that case, Testcontainers' Ryuk resource reaper provides eventual cleanup for the labeled containers and networks created by the terminated process. This is resource cleanup, not graceful application shutdown.
+
+The repository pins this behavior in the [`runner-tests/isolation/termination`](./runner-tests/isolation/termination) fixture. It starts one shared and one dedicated PostgreSQL container, performs and reads back a real database write, deliberately leaves application startup pending, and writes a signal to the external verifier. The verifier confirms that both containers and both networks exist, kills the complete Vitest process group with `SIGKILL`, verifies that application `stop` did not run, and waits until every fixture-owned Docker resource has disappeared.
+
+Run that failure path independently with:
+
+```sh
+bun run test:termination-cleanup:docker
+```
+
 ## Why use it?
 
-- One run-scoped instance of each required container, shared by the test files in that command.
+- Explicit shared or file-dedicated ownership for each named container.
 - Typed PostgreSQL, SQL Server, MongoDB, and RabbitMQ connection resources, plus image overrides and typed resources for custom Docker images.
 - Dynamic mapped ports, with no hard-coded host ports.
 - Application startup only after infrastructure is ready.
@@ -166,7 +261,7 @@ export class ExampleBackend {
 
 ## Annotation mode
 
-Annotation mode keeps each test file's infrastructure requirements beside its tests. The scanner reads literal `@RequiredContainer([Container.Name, ...])` declarations before test modules load. One annotation can list every container required by that file.
+Annotation mode keeps each test file's infrastructure requirements beside its tests. The scanner reads one literal, named `@RequiredContainer({...})` declaration before test modules load. Every declaration includes its container kind and isolation.
 
 ### Required annotation settings
 
@@ -184,7 +279,11 @@ Name the test with the default `.container.integration.test.ts` suffix and use a
 
 ```ts
 // test/order.container.integration.test.ts
-@RequiredContainer([Container.RabbitMq, Container.PostgreSql])
+@RequiredContainer({
+  messages: { kind: Container.RabbitMq, isolation: 'shared' },
+  primaryDatabase: { kind: Container.PostgreSql, isolation: 'dedicated' },
+  auditDatabase: { kind: Container.PostgreSql, isolation: 'dedicated' },
+})
 @ApplicationIntegrationTest
 export class OrderApplicationIntegrationTest {}
 ```
@@ -237,7 +336,10 @@ import {
 } from '@integration-testing/testcontainers';
 import { applicationContext } from './application.vitest.setup.js';
 
-@RequiredContainer([Container.RabbitMq, Container.PostgreSql])
+@RequiredContainer({
+  messages: { kind: Container.RabbitMq, isolation: 'shared' },
+  database: { kind: Container.PostgreSql, isolation: 'dedicated' },
+})
 @ApplicationIntegrationTest
 export class OrderApplicationIntegrationTest {}
 
@@ -303,7 +405,10 @@ import {
 } from '@integration-testing/testcontainers';
 import { applicationContext } from './application.jest.setup.js';
 
-@RequiredContainer([Container.RabbitMq, Container.PostgreSql])
+@RequiredContainer({
+  messages: { kind: Container.RabbitMq, isolation: 'shared' },
+  database: { kind: Container.PostgreSql, isolation: 'dedicated' },
+})
 @ApplicationIntegrationTest
 export class OrderApplicationIntegrationTest {}
 
@@ -320,7 +425,7 @@ Then run:
 npx jest --config jest.annotation.config.ts --runInBand
 ```
 
-In annotation mode, one annotation lists every required container. The previous single-container and variadic forms remain supported. Complete repository fixtures live in [`examples/vitest-annotation`](./examples/vitest-annotation) and [`examples/jest-annotation`](./examples/jest-annotation).
+Keep exactly one named `@RequiredContainer({...})` marker class in each matched annotation test file. Dynamic keys, spreads, computed values, missing isolation, and multiple marker classes are rejected with a file-specific error. Complete repository fixtures live in [`examples/vitest-annotation`](./examples/vitest-annotation) and [`examples/jest-annotation`](./examples/jest-annotation).
 
 Do not mix project configuration and annotation discovery in the same runner project. Keep them as separate Vitest or Jest configs if you use both styles in one repository.
 
@@ -342,8 +447,8 @@ import { defineContainerProject } from '@integration-testing/testcontainers/vite
 export default defineContainerProject({
   include: ['test/**/*.integration.test.ts'],
   containers: {
-    database: postgreSql(),
-    messages: rabbitMq(),
+    database: postgreSql({ isolation: 'dedicated' }),
+    messages: rabbitMq({ isolation: 'shared' }),
   },
   application: {
     setup: './test/application.setup.ts',
@@ -359,11 +464,11 @@ export default defineContainerProject({
 
 No consumer-owned global setup or teardown files are needed.
 
-The object keys `database` and `messages` name the two container instances. Each `fromContainer(name, property)` binding copies a discovered connection value into the application process before its setup module and SUT start. TypeScript rejects unknown names and properties that do not belong to that container kind. The library also validates deserialized configuration at runtime and restores previous environment values after the run.
+The object keys `database` and `messages` name the two container instances. Each `fromContainer(name, property)` binding copies a discovered connection value into the process executing that test file immediately before the SUT starts. TypeScript rejects unknown names and properties that do not belong to that container kind. The library also validates deserialized configuration at runtime and restores previous environment values after application shutdown or startup failure.
 
 #### 2. Register how the application starts and stops
 
-The setup file connects the sample application to the test lifecycle. The runner configuration has already installed `DATABASE_URL` and `RABBITMQ_URL` before this module loads. The installer keeps the value returned by `start` available during tests and passes it to `stop` afterward:
+The setup file connects the sample application to the test lifecycle. The installer resolves and installs `DATABASE_URL` and `RABBITMQ_URL` before it calls `start`. It keeps the value returned by `start` available during tests and passes it to `stop` afterward. Code that needs these variables should read them inside `start`, as shown here, rather than at module top level:
 
 ```ts
 // test/application.setup.ts
@@ -423,8 +528,8 @@ import { defineContainerProject } from '@integration-testing/testcontainers/jest
 export default defineContainerProject({
   include: ['**/test/**/*.integration.test.ts'],
   containers: {
-    database: postgreSql(),
-    messages: rabbitMq(),
+    database: postgreSql({ isolation: 'dedicated' }),
+    messages: rabbitMq({ isolation: 'shared' }),
   },
   application: {
     setup: './test/application.setup.ts',
@@ -531,7 +636,7 @@ The runnable examples intentionally use plain Node.js clients so framework neutr
 
 ### NestJS example
 
-Keep the same container project configuration shown above. Its environment bindings are installed before Nest compiles `AppModule`, so existing configuration modules can read `DATABASE_URL` and `RABBITMQ_URL` normally.
+Keep the same container project configuration shown above. Its environment bindings are installed before the `start` callback compiles `AppModule`, so configuration read during Nest bootstrap receives that test file's selected shared and dedicated values. The dynamic import inside `start` also covers applications that read environment variables while `AppModule` is first evaluated.
 
 Install the Nest testing tools and HTTP test client if your application does not already have them:
 
@@ -547,11 +652,11 @@ Register the Nest application lifecycle:
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { installVitestApplicationIntegrationTestSupport } from '@integration-testing/testcontainers/vitest';
-import { AppModule } from '../src/app.module.js';
 
 export const applicationContext =
   installVitestApplicationIntegrationTestSupport<INestApplication>({
     start: async () => {
+      const { AppModule } = await import('../src/app.module.js');
       const moduleRef = await Test.createTestingModule({
         imports: [AppModule],
       }).compile();
@@ -598,7 +703,7 @@ import { defineContainerProject } from '@integration-testing/testcontainers/vite
 
 export default defineContainerProject({
   include: ['test/**/*.integration.test.ts'],
-  containers: { database: sqlServer() },
+  containers: { database: sqlServer({ isolation: 'dedicated' }) },
 });
 ```
 
@@ -607,11 +712,15 @@ Read the injected resource in a Vitest test:
 ```ts
 import { Container } from '@integration-testing/testcontainers';
 import { injectedContainerResources } from '@integration-testing/testcontainers/vitest';
+import { expect, test } from 'vitest';
 
-const database = injectedContainerResources().getNamed(
-  'database',
-  Container.SqlServer,
-);
+test('uses the file container', () => {
+  const database = injectedContainerResources().getNamed(
+    'database',
+    Container.SqlServer,
+  );
+  expect(database.port).toBeGreaterThan(0);
+});
 ```
 
 Jest exposes the same accessor from `@integration-testing/testcontainers/jest`:
@@ -622,21 +731,23 @@ import { injectedContainerResources } from '@integration-testing/testcontainers/
 
 Use `getNamed(name, kind)` when the configuration key matters or more than one instance has the same kind. Use `get(kind)` when exactly one resource of that kind exists.
 
+Read injected resources from a test, `beforeAll`, or a later hook. Calling the accessor during module collection is rejected because file-dedicated containers have not started yet.
+
 ## Built-in containers
 
 | Factory | Typed resource |
 | --- | --- |
-| `postgreSql(options?)` | `host`, `port`, `database`, `username`, `password`, `connectionUri` |
-| `sqlServer(options?)` | `host`, `port`, `database`, `username`, `password` |
-| `mongoDb(options?)` | `host`, `port`, host-safe `connectionString` |
-| `rabbitMq(options?)` | `host`, `port`, `amqpUrl`, `amqpsUrl` |
+| `postgreSql({ isolation, ...options })` | `host`, `port`, `database`, `username`, `password`, `connectionUri` |
+| `sqlServer({ isolation, ...options })` | `host`, `port`, `database`, `username`, `password` |
+| `mongoDb({ isolation, ...options })` | `host`, `port`, host-safe `connectionString` |
+| `rabbitMq({ isolation, ...options })` | `host`, `port`, `amqpUrl`, `amqpsUrl` |
 
 Configuration keys identify named instances. Explicit projects can run multiple containers of the same kind and bind each one independently:
 
 ```ts
 containers: {
-  primaryDatabase: postgreSql(),
-  auditDatabase: postgreSql({ database: 'audit' }),
+  primaryDatabase: postgreSql({ isolation: 'dedicated' }),
+  auditDatabase: postgreSql({ isolation: 'dedicated', database: 'audit' }),
 },
 application: {
   setup: './test/application.setup.ts',
@@ -655,8 +766,8 @@ Every built-in factory accepts an image override. The image must remain compatib
 
 ```ts
 containers: {
-  database: postgreSql({ image: 'postgres:17-alpine' }),
-  messages: rabbitMq({ image: 'rabbitmq:4.1.8-management-alpine' }),
+  database: postgreSql({ isolation: 'dedicated', image: 'postgres:17-alpine' }),
+  messages: rabbitMq({ isolation: 'shared', image: 'rabbitmq:4.1.8-management-alpine' }),
 }
 ```
 
@@ -727,7 +838,24 @@ export const setup = lifecycle.setup;
 export const teardown = lifecycle.teardown;
 ```
 
-Use `./test/redis.global-setup.ts` as `globalSetup`, then annotate and test the service:
+Register the global lifecycle and the package's file lifecycle in Vitest:
+
+```ts
+// vitest.integration.config.ts
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    include: ['test/**/*.container.integration.test.ts'],
+    globalSetup: ['./test/redis.global-setup.ts'],
+    setupFiles: ['@integration-testing/testcontainers/vitest/file-setup'],
+    sequence: { setupFiles: 'list' },
+    isolate: true,
+  },
+});
+```
+
+Then annotate and test the service:
 
 ```ts
 // test/redis.container.integration.test.ts
@@ -737,7 +865,9 @@ import { createClient, type RedisClientType } from 'redis';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { Container } from './container-catalog.js';
 
-@RequiredContainer([Container.Redis])
+@RequiredContainer({
+  redis: { kind: Container.Redis, isolation: 'shared' },
+})
 class RedisIntegrationTest {}
 
 let client: RedisClientType;
@@ -759,6 +889,8 @@ test(`${RedisIntegrationTest.name} stores and reads a value`, async () => {
 ```
 
 The scanner requires the catalog to be imported under the identifier `Container`, and the same catalog must be passed as `containerNames`. The registry/runtime API can also be used directly without annotations. The repository contains the typed declaration in [`examples/custom-container`](./examples/custom-container).
+
+The global setup registry starts custom declarations marked `shared`. For a custom declaration marked `dedicated`, import the same registry module from a runner setup file and call `configureVitestContainerFileSupport({ registry })` or `configureJestContainerFileSupport({ registry })` before the package's file hook runs. An application setup module can configure the registry and install the application lifecycle together.
 
 ### How typed resources and dynamic ports work
 
@@ -806,7 +938,7 @@ Lifecycle events are logged by default. Raw container stdout and stderr are disa
 ```ts
 export default defineContainerProject({
   include: ['test/**/*.integration.test.ts'],
-  containers: { database: postgreSql() },
+  containers: { database: postgreSql({ isolation: 'shared' }) },
   containerLogs: true,
 });
 ```
@@ -845,6 +977,6 @@ bun run test:docker
 bun run test:examples:docker
 ```
 
-`verify` covers types, lint, unit tests, runner consumers, builds, and isolated packed-package consumers. The Docker commands exercise every built-in adapter and both real PostgreSQL/RabbitMQ examples under Vitest and Jest.
+`verify` covers types, lint, unit tests, runner consumers, builds, and isolated packed-package consumers. The Docker commands exercise every built-in adapter, both real PostgreSQL/RabbitMQ examples, and mixed shared and file-dedicated resources under Vitest and Jest.
 
 For lifecycle details and extension APIs, see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md), [`docs/RUNNERS.md`](./docs/RUNNERS.md), and [`docs/CUSTOM-CONTAINERS.md`](./docs/CUSTOM-CONTAINERS.md).

@@ -55,18 +55,19 @@ test(
     try {
       await writeFile(
         join(root, 'candidate.container.integration.test.ts'),
-        '@RequiredContainer(Container.SqlServer) class CandidateIntegrationTest {}',
+        "@RequiredContainer({ database: { kind: Container.SqlServer, isolation: 'shared' } }) class CandidateIntegrationTest {}",
       );
       const lifecycle = createVitestContainerGlobalSetup({
         root,
-        registry: new ContainerRegistry().register(
-          Container.SqlServer,
-          () => container,
+        registry: new ContainerRegistry().registerInstance(
+          'database', Container.SqlServer, () => container,
         ),
         networkFactory: () => Promise.resolve(network),
         prepareResources: (resources) => {
-          events.push(`prepared ${resources.get(Container.SqlServer).database}`);
-          return Promise.resolve(() => events.push('preparation cleaned'));
+          events.push(`prepared ${resources.getNamed('database', Container.SqlServer).database}`);
+          return Promise.resolve(() => {
+            events.push('preparation cleaned');
+          });
         },
       });
 
@@ -81,7 +82,7 @@ test(
 
       expect(providedKey).toBe(CONTAINER_RESOURCES_CONTEXT_KEY);
       expect(providedValue).toEqual({
-        [Container.SqlServer]: {
+        database: {
           kind: Container.SqlServer,
           host: '127.0.0.1',
           port: 14_333,
@@ -110,14 +111,13 @@ test(
     try {
       await writeFile(
         join(root, 'candidate.container.integration.test.ts'),
-        '@RequiredContainer(Container.SqlServer) class CandidateIntegrationTest {}',
+        "@RequiredContainer({ database: { kind: Container.SqlServer, isolation: 'shared' } }) class CandidateIntegrationTest {}",
       );
       const failure = new Error('migration failed');
       const lifecycle = createVitestContainerGlobalSetup({
         root,
-        registry: new ContainerRegistry().register(
-          Container.SqlServer,
-          () => container,
+        registry: new ContainerRegistry().registerInstance(
+          'database', Container.SqlServer, () => container,
         ),
         networkFactory: () => Promise.resolve(network),
         prepareResources: () => Promise.reject(failure),

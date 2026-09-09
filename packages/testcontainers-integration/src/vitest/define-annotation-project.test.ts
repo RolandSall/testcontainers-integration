@@ -18,11 +18,26 @@ test('given annotation options, when a Vitest project is defined, then scanner l
     '@integration-testing/testcontainers/vitest/annotation-global-setup',
   ]);
   expect(config.test?.setupFiles).toEqual([
+    '@integration-testing/testcontainers/vitest/file-setup',
     './test/application.vitest.setup.ts',
   ]);
   expect(config.test?.provide?.[ANNOTATION_PROJECT_CONTEXT_KEY]).toEqual({
-    version: 1,
+    version: 2,
     testFileSuffix: '.container.integration.test.ts',
     containerLogs: true,
   });
+});
+
+test('annotation projects preserve the configured Vitest worker count', () => {
+  const config = defineAnnotationProject({
+    vitest: { maxWorkers: 3 },
+  });
+
+  expect(config.test?.maxWorkers).toBe(3);
+});
+
+test('annotation projects reject Vitest isolate false', () => {
+  expect(() => defineAnnotationProject({
+    vitest: { isolate: false },
+  } as never)).toThrow('Vitest isolate: false is not supported');
 });

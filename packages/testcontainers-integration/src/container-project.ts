@@ -1,6 +1,7 @@
 import { Container } from './container-kind.js';
 import type { Container as ManagedContainer } from './container-kind.js';
 import type { ContainerResource } from './container-contract.js';
+import { parseContainerIsolation, type ContainerIsolation } from './container-isolation.js';
 import type { ContainerKind, ContainerResourceMap } from './container-resource-map.js';
 import { ContainerRegistry } from './container-registry.js';
 import type { ContainerRuntimeInstance } from './container-runtime.js';
@@ -15,10 +16,10 @@ import { SqlServerTestContainer } from './sql-server/sql-server-container.js';
 
 /** Serializable built-in container declaration accepted by runner project configuration. */
 export type BuiltInContainerDefinition =
-  | Readonly<{ kind: typeof Container.MongoDb; options: MongoDbTestContainerOptions }>
-  | Readonly<{ kind: typeof Container.PostgreSql; options: PostgreSqlTestContainerOptions }>
-  | Readonly<{ kind: typeof Container.RabbitMq; options: RabbitMqTestContainerOptions }>
-  | Readonly<{ kind: typeof Container.SqlServer; options: SqlServerTestContainerOptions }>;
+  | Readonly<{ kind: typeof Container.MongoDb; isolation: ContainerIsolation; options: MongoDbTestContainerOptions }>
+  | Readonly<{ kind: typeof Container.PostgreSql; isolation: ContainerIsolation; options: PostgreSqlTestContainerOptions }>
+  | Readonly<{ kind: typeof Container.RabbitMq; isolation: ContainerIsolation; options: RabbitMqTestContainerOptions }>
+  | Readonly<{ kind: typeof Container.SqlServer; isolation: ContainerIsolation; options: SqlServerTestContainerOptions }>;
 
 /** Named container declarations used by an explicit runner project. */
 export type ContainerProjectContainers = Readonly<Record<string, BuiltInContainerDefinition>>;
@@ -71,10 +72,11 @@ export const fromContainer = <const TName extends string, const TProperty extend
 });
 
 export interface SerializedContainerProject {
-  readonly version: 1;
+  readonly version: 2;
   readonly containers: readonly Readonly<{
     name: string;
     kind: ContainerKind;
+    isolation: ContainerIsolation;
     options: Readonly<Record<string, string | number>>;
   }>[];
   readonly environment?: Readonly<Record<string, ContainerEnvironmentReference>>;
@@ -83,35 +85,51 @@ export interface SerializedContainerProject {
 
 /** Declares a PostgreSQL container for explicit project configuration. */
 export const postgreSql = (
-  options: PostgreSqlTestContainerOptions = {},
+  declaration: PostgreSqlTestContainerOptions & Readonly<{ isolation: ContainerIsolation }>,
 ): Readonly<{
   kind: typeof Container.PostgreSql;
+  isolation: ContainerIsolation;
   options: PostgreSqlTestContainerOptions;
-}> => ({ kind: Container.PostgreSql, options });
+}> => {
+  const { isolation, ...options } = declaration;
+  return { kind: Container.PostgreSql, isolation, options };
+};
 
 /** Declares a RabbitMQ container for explicit project configuration. */
 export const rabbitMq = (
-  options: RabbitMqTestContainerOptions = {},
+  declaration: RabbitMqTestContainerOptions & Readonly<{ isolation: ContainerIsolation }>,
 ): Readonly<{
   kind: typeof Container.RabbitMq;
+  isolation: ContainerIsolation;
   options: RabbitMqTestContainerOptions;
-}> => ({ kind: Container.RabbitMq, options });
+}> => {
+  const { isolation, ...options } = declaration;
+  return { kind: Container.RabbitMq, isolation, options };
+};
 
 /** Declares a MongoDB container for explicit project configuration. */
 export const mongoDb = (
-  options: MongoDbTestContainerOptions = {},
+  declaration: MongoDbTestContainerOptions & Readonly<{ isolation: ContainerIsolation }>,
 ): Readonly<{
   kind: typeof Container.MongoDb;
+  isolation: ContainerIsolation;
   options: MongoDbTestContainerOptions;
-}> => ({ kind: Container.MongoDb, options });
+}> => {
+  const { isolation, ...options } = declaration;
+  return { kind: Container.MongoDb, isolation, options };
+};
 
 /** Declares a SQL Server container for explicit project configuration. */
 export const sqlServer = (
-  options: SqlServerTestContainerOptions = {},
+  declaration: SqlServerTestContainerOptions & Readonly<{ isolation: ContainerIsolation }>,
 ): Readonly<{
   kind: typeof Container.SqlServer;
+  isolation: ContainerIsolation;
   options: SqlServerTestContainerOptions;
-}> => ({ kind: Container.SqlServer, options });
+}> => {
+  const { isolation, ...options } = declaration;
+  return { kind: Container.SqlServer, isolation, options };
+};
 
 export const serializeContainerProject = <
   TContainers extends ContainerProjectContainers,
@@ -123,10 +141,11 @@ export const serializeContainerProject = <
   const definitions = Object.entries(containers).map(([name, definition]) => ({
     name,
     kind: definition.kind,
+    isolation: definition.isolation,
     options: definition.options,
   }));
   return parseContainerProject({
-    version: 1,
+    version: 2,
     containers: definitions,
     environment,
     containerLogs,
@@ -134,8 +153,8 @@ export const serializeContainerProject = <
 };
 
 export const parseContainerProject = (value: unknown): SerializedContainerProject => {
-  if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.containers)) {
-    throw new Error('Container project configuration is missing or invalid');
+  if (!isRecord(value) || value.version !== 2 || !Array.isArray(value.containers)) {
+    throw new Error('Container project configuration is missing, invalid, or uses an unsupported version');
   }
 
   const names = new Set<string>();
@@ -149,6 +168,12 @@ export const parseContainerProject = (value: unknown): SerializedContainerProjec
     ) {
       throw new Error('Container project contains an invalid container declaration');
     }
+    let isolation: ContainerIsolation;
+    try {
+      isolation = parseContainerIsolation(candidate.isolation);
+    } catch (error) {
+      throw new Error(`Container project isolation is invalid: ${candidate.name}`, { cause: error });
+    }
     if (names.has(candidate.name)) {
       throw new Error(`Container project name is duplicated: ${candidate.name}`);
     }
@@ -156,6 +181,7 @@ export const parseContainerProject = (value: unknown): SerializedContainerProjec
     return {
       name: candidate.name,
       kind: candidate.kind,
+      isolation,
       options: candidate.options,
     };
   });
@@ -164,7 +190,7 @@ export const parseContainerProject = (value: unknown): SerializedContainerProjec
     throw new Error('Container project containerLogs option is invalid');
   }
   return {
-    version: 1,
+    version: 2,
     containers,
     ...(environment === undefined ? {} : { environment }),
     ...(value.containerLogs === undefined ? {} : { containerLogs: value.containerLogs }),
@@ -213,10 +239,13 @@ export const containerProjectKinds = (
 
 export const containerProjectInstances = (
   project: SerializedContainerProject,
-): readonly ContainerRuntimeInstance[] => project.containers.map(({ name, kind }) => ({
-  name,
-  kind,
-}));
+  isolation?: ContainerIsolation,
+): readonly ContainerRuntimeInstance[] => project.containers
+  .filter((container) => isolation === undefined || container.isolation === isolation)
+  .map(({ name, kind }) => ({
+    name,
+    kind,
+  }));
 
 const parseContainerEnvironment = (
   value: unknown,

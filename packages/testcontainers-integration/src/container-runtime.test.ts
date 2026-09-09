@@ -149,14 +149,14 @@ describe('ContainerRuntime', () => {
         'network stopped',
       ]);
       expect(logger.entries).toEqual([
-        'runtime: creating shared container network',
-        'runtime: shared container network is ready',
+        'runtime: creating container network',
+        'runtime: container network is ready',
         'runtime: starting postgres container',
         'runtime: postgres container is ready',
         'runtime: stopping postgres container',
         'runtime: postgres container stopped',
-        'runtime: stopping shared container network',
-        'runtime: shared container network stopped',
+        'runtime: stopping container network',
+        'runtime: container network stopped',
       ]);
     },
   );
@@ -203,33 +203,61 @@ describe('ContainerRuntime', () => {
       ]);
     },
   );
+
+  test('one container cleanup failure does not skip the remaining container or network', async () => {
+    const cleanupFailure = new Error('audit cleanup failed');
+    let primaryStopCount = 0;
+    let auditStopCount = 0;
+    const network = new FakeContainerNetwork([]);
+    const resource: PostgresResource = { kind: 'postgres', port: 54_321 };
+    const primary: ManagedContainer<PostgresResource> = {
+      kind: 'postgres',
+      start: () => Promise.resolve(resource),
+      stop: () => {
+        primaryStopCount += 1;
+        return Promise.resolve();
+      },
+    };
+    const audit: ManagedContainer<PostgresResource> = {
+      kind: 'postgres',
+      start: () => Promise.resolve(resource),
+      stop: () => {
+        auditStopCount += 1;
+        return Promise.reject(cleanupFailure);
+      },
+    };
+    const runtime = new ContainerRuntime(
+      new ContainerRegistry()
+        .registerInstance('primary', 'postgres', () => primary)
+        .registerInstance('audit', 'postgres', () => audit),
+      { networkFactory: () => Promise.resolve(network) },
+    );
+    await runtime.startInstances([
+      { name: 'primary', kind: 'postgres' },
+      { name: 'audit', kind: 'postgres' },
+    ]);
+
+    await expect(runtime.stop()).rejects.toMatchObject({ errors: [cleanupFailure] });
+
+    expect(primaryStopCount).toBe(1);
+    expect(auditStopCount).toBe(1);
+    expect(network.stopCount).toBe(1);
+  });
 });
 
 describe('RequiredContainer', () => {
-  test(
-    'given repeated container declarations, when requirements are read, then unique containers retain declaration order',
-    () => {
-      @RequiredContainer([Container.SqlServer, 'postgres', Container.SqlServer])
-      class MultipleContainerIntegrationTest {}
+  test('retains named mixed-isolation declarations', () => {
+    @RequiredContainer({
+      messages: { kind: Container.RabbitMq, isolation: 'shared' },
+      primaryDatabase: { kind: Container.PostgreSql, isolation: 'dedicated' },
+      auditDatabase: { kind: Container.PostgreSql, isolation: 'dedicated' },
+    })
+    class MultipleContainerIntegrationTest {}
 
-      expect(requiredContainersFor(MultipleContainerIntegrationTest)).toEqual([
-        Container.SqlServer,
-        'postgres',
-      ]);
-    },
-  );
-
-  test(
-    'given stacked legacy decorators, when requirements are read, then their containers are merged',
-    () => {
-      @RequiredContainer(Container.SqlServer)
-      @RequiredContainer('postgres')
-      class StackedContainerIntegrationTest {}
-
-      expect(requiredContainersFor(StackedContainerIntegrationTest)).toEqual([
-        'postgres',
-        Container.SqlServer,
-      ]);
-    },
-  );
+    expect(requiredContainersFor(MultipleContainerIntegrationTest)).toEqual([
+      { name: 'messages', kind: Container.RabbitMq, isolation: 'shared' },
+      { name: 'primaryDatabase', kind: Container.PostgreSql, isolation: 'dedicated' },
+      { name: 'auditDatabase', kind: Container.PostgreSql, isolation: 'dedicated' },
+    ]);
+  });
 });

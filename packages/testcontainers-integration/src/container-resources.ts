@@ -45,6 +45,27 @@ export class ContainerResources {
     return ContainerResources.fromNamed(Object.entries(resources));
   }
 
+  /** Combines independently owned resource collections and rejects duplicate names. */
+  static merge(...collections: readonly ContainerResources[]): ContainerResources {
+    const resources = new Map<string, ContainerResource>();
+    for (const collection of collections) {
+      for (const [name, resource] of Object.entries(collection.toSerializable())) {
+        if (resources.has(name)) {
+          throw new Error(`Container resource name is duplicated while merging: ${name}`);
+        }
+        resources.set(name, resource);
+      }
+    }
+    return ContainerResources.fromNamed(resources);
+  }
+
+  /** Selects named resources and verifies their expected kinds. */
+  select(instances: readonly Readonly<{ name: string; kind: ContainerKind }>[]): ContainerResources {
+    return ContainerResources.fromNamed(
+      instances.map(({ name, kind }) => [name, this.getNamed(name, kind)] as const),
+    );
+  }
+
   /**
    * Returns the resource associated with a container kind.
    *

@@ -6,7 +6,6 @@ import type {
 import { serializeContainerProject } from '../container-project.js';
 import { CONTAINER_PROJECT_CONTEXT_KEY } from '../project-context.js';
 
-/** Concise, explicit configuration for a Vitest integration-test project. */
 export interface VitestContainerProjectOptions<
   TContainers extends ContainerProjectContainers = ContainerProjectContainers,
 > {
@@ -15,43 +14,48 @@ export interface VitestContainerProjectOptions<
   readonly application?: string | ContainerProjectApplication<TContainers>;
   readonly hookTimeout?: number;
   readonly testTimeout?: number;
-  /** Streams raw container output. Disabled by default. */
   readonly containerLogs?: boolean;
+  readonly vitest?: Omit<
+    NonNullable<ViteUserConfig['test']>,
+    'include' | 'globalSetup' | 'setupFiles' | 'provide' | 'isolate' | 'sequence'
+  >;
 }
 
-/**
- * Defines a complete Vitest project without custom lifecycle glue or decorators.
- */
+/** Defines a Vitest project with shared or file-dedicated named containers. */
 export const defineContainerProject = <
   const TContainers extends ContainerProjectContainers,
->(
-  options: VitestContainerProjectOptions<TContainers>,
-): ViteUserConfig => {
+>(options: VitestContainerProjectOptions<TContainers>): ViteUserConfig => {
+  if ((options.vitest as { isolate?: unknown } | undefined)?.isolate === false) {
+    throw new Error('Vitest isolate: false is not supported with file-dedicated containers');
+  }
   const applicationSetup = typeof options.application === 'string'
     ? options.application
     : options.application?.setup;
   const environment = typeof options.application === 'object'
     ? options.application.environment
     : undefined;
-  return ({
-  test: {
-    include: [...options.include],
-    globalSetup: ['@integration-testing/testcontainers/vitest/project-global-setup'],
-    ...(applicationSetup === undefined
-      ? {}
-      : { setupFiles: [applicationSetup] }),
-    ...(options.hookTimeout === undefined ? {} : { hookTimeout: options.hookTimeout }),
-    ...(options.testTimeout === undefined ? {} : { testTimeout: options.testTimeout }),
-    provide: {
-      [CONTAINER_PROJECT_CONTEXT_KEY]: serializeContainerProject(
-        options.containers,
-        environment,
-        options.containerLogs,
-      ),
+  return {
+    test: {
+      ...options.vitest,
+      include: [...options.include],
+      globalSetup: ['@integration-testing/testcontainers/vitest/project-global-setup'],
+      setupFiles: [
+        '@integration-testing/testcontainers/vitest/file-setup',
+        ...(applicationSetup === undefined ? [] : [applicationSetup]),
+      ],
+      sequence: { setupFiles: 'list', hooks: 'stack' },
+      isolate: true,
+      ...(options.hookTimeout === undefined ? {} : { hookTimeout: options.hookTimeout }),
+      ...(options.testTimeout === undefined ? {} : { testTimeout: options.testTimeout }),
+      provide: {
+        [CONTAINER_PROJECT_CONTEXT_KEY]: serializeContainerProject(
+          options.containers,
+          environment,
+          options.containerLogs,
+        ),
+      },
     },
-  },
-  });
+  };
 };
 
-/** Explicit runner-qualified alias for mixed-runner documentation and tooling. */
 export const defineVitestContainerProject = defineContainerProject;

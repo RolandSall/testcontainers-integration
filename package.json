@@ -15,11 +15,13 @@
   "scripts": {
     "audit": "bun audit",
     "build": "nx run-many -t build",
-    "typecheck": "tsc --noEmit -p tsconfig.json && nx run-many -t typecheck",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p runner-tests/isolation/tsconfig.vitest.json && tsc --noEmit -p runner-tests/isolation/tsconfig.jest.json && nx run-many -t typecheck",
     "test": "nx run-many -t test",
     "test:runners": "bun run build && tsc --noEmit -p runner-tests/jest/tsconfig.jest.json && tsc --noEmit -p runner-tests/vitest/tsconfig.json && jest --config runner-tests/jest/jest.config.ts --runInBand && vitest run --config runner-tests/vitest/vitest.config.ts",
     "test:docker": "nx run testcontainers-integration:test-docker",
-    "test:examples:docker": "bun run build && bun --cwd examples/vitest-project integration && bun --cwd examples/jest-project integration && bun --cwd examples/vitest-annotation integration && bun --cwd examples/jest-annotation integration",
+    "test:examples:docker": "bun run build && bun --cwd examples/vitest-project integration && bun --cwd examples/jest-project integration && bun --cwd examples/vitest-annotation integration && bun --cwd examples/jest-annotation integration && bun scripts/verify-file-isolation.ts",
+    "test:file-isolation:docker": "bun run build && bun scripts/verify-file-isolation.ts",
+    "test:termination-cleanup:docker": "bun run build && bun scripts/verify-file-isolation.ts --termination-only",
     "lint": "eslint packages examples runner-tests scripts --max-warnings=0",
     "verify": "bun run audit && bun run typecheck && bun run lint && bun run test && bun run test:runners && bun run build && bun run pack:check",
     "pack:check": "bun scripts/verify-packages.ts",
@@ -46,6 +48,7 @@
     "vitest": "^4.0.0"
   },
   "overrides": {
-    "esbuild": "0.28.1"
+    "esbuild": "0.28.1",
+    "smol-toml": "1.7.1"
   }
 }
