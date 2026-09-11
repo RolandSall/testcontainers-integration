@@ -15,7 +15,7 @@
   "scripts": {
     "audit": "bun audit",
     "build": "nx run-many -t build",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p runner-tests/isolation/tsconfig.vitest.json && tsc --noEmit -p runner-tests/isolation/tsconfig.jest.json && nx run-many -t typecheck",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p runner-tests/file-isolation/tsconfig.vitest.json && tsc --noEmit -p runner-tests/file-isolation/tsconfig.jest.json && nx run-many -t typecheck",
     "test": "nx run-many -t test",
     "test:runners": "bun run build && tsc --noEmit -p runner-tests/jest/tsconfig.jest.json && tsc --noEmit -p runner-tests/vitest/tsconfig.json && jest --config runner-tests/jest/jest.config.ts --runInBand && vitest run --config runner-tests/vitest/vitest.config.ts",
     "test:docker": "nx run testcontainers-integration:test-docker",

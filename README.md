@@ -116,7 +116,7 @@ If dedicated startup, preparation, environment resolution, or application bootst
 
 A hung bootstrap followed by a forced runner termination is different from a rejected bootstrap. After `SIGKILL`, Node.js cannot run `catch`, `finally`, application `stop`, file cleanup, or global teardown. In that case, Testcontainers' Ryuk resource reaper provides eventual cleanup for the labeled containers and networks created by the terminated process. This is resource cleanup, not graceful application shutdown.
 
-The repository pins this behavior in the [`runner-tests/isolation/termination`](./runner-tests/isolation/termination) fixture. It starts one shared and one dedicated PostgreSQL container, performs and reads back a real database write, deliberately leaves application startup pending, and writes a signal to the external verifier. The verifier confirms that both containers and both networks exist, kills the complete Vitest process group with `SIGKILL`, verifies that application `stop` did not run, and waits until every fixture-owned Docker resource has disappeared.
+The repository pins this behavior in the [`runner-tests/file-isolation/termination`](./runner-tests/file-isolation/termination) fixture. It starts one shared and one dedicated PostgreSQL container, performs and reads back a real database write, deliberately leaves application startup pending, and writes a signal to the external verifier. The verifier confirms that both containers and both networks exist, kills the complete Vitest process group with `SIGKILL`, verifies that application `stop` did not run, and waits until every fixture-owned Docker resource has disappeared.
 
 Run that failure path independently with:
 
@@ -978,5 +978,7 @@ bun run test:examples:docker
 ```
 
 `verify` covers types, lint, unit tests, runner consumers, builds, and isolated packed-package consumers. The Docker commands exercise every built-in adapter, both real PostgreSQL/RabbitMQ examples, and mixed shared and file-dedicated resources under Vitest and Jest.
+
+See [`runner-tests/README.md`](./runner-tests/README.md) for a directory-by-directory map of the fast runner contracts, real Docker isolation matrix, and failure-path fixtures.
 
 For lifecycle details and extension APIs, see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md), [`docs/RUNNERS.md`](./docs/RUNNERS.md), and [`docs/CUSTOM-CONTAINERS.md`](./docs/CUSTOM-CONTAINERS.md).
