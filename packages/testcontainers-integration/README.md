@@ -146,7 +146,7 @@ bun run test:termination-cleanup:docker
 Most TypeScript backends already have TypeScript and a test runner. In that case, install only this library:
 
 ```bash
-npm install --save-dev @integration-testing/testcontainers@beta
+npm install --save-dev @integration-testing/testcontainers
 ```
 
 If the project does not have a test runner yet, install one. You do not need both runners.
