@@ -116,7 +116,7 @@ If dedicated startup, preparation, environment resolution, or application bootst
 
 A hung bootstrap followed by a forced runner termination is different from a rejected bootstrap. After `SIGKILL`, Node.js cannot run `catch`, `finally`, application `stop`, file cleanup, or global teardown. In that case, Testcontainers' Ryuk resource reaper provides eventual cleanup for the labeled containers and networks created by the terminated process. This is resource cleanup, not graceful application shutdown.
 
-The repository pins this behavior in the [`runner-tests/file-isolation/termination`](./runner-tests/file-isolation/termination) fixture. It starts one shared and one dedicated PostgreSQL container, performs and reads back a real database write, deliberately leaves application startup pending, and writes a signal to the external verifier. The verifier confirms that both containers and both networks exist, kills the complete Vitest process group with `SIGKILL`, verifies that application `stop` did not run, and waits until every fixture-owned Docker resource has disappeared.
+The repository pins this behavior in a real parent Vitest test under [`runner-tests/file-isolation/termination`](./runner-tests/file-isolation/termination). The test starts a child Vitest process with one shared and one dedicated PostgreSQL container. The child performs and reads back a real database write, then leaves application startup pending. The parent test confirms that both containers and both networks exist, kills the complete child process group with `SIGKILL`, verifies that application `stop` did not run, and waits until every fixture-owned Docker resource has disappeared.
 
 Run that failure path independently with:
 
