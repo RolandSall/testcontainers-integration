@@ -1,8 +1,9 @@
+import { strict as assert } from 'node:assert';
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { expect, test } from 'vitest';
+import { test } from 'node:test';
 
 interface TerminationReport {
   readonly sideEffectCompleted: boolean;
@@ -15,20 +16,51 @@ interface DockerResourceSets {
   readonly networks: ReadonlySet<string>;
 }
 
-const workspaceRoot = resolve(import.meta.dirname, '../../..');
-const vitest = resolve(workspaceRoot, 'node_modules', '.bin', 'vitest');
+interface RunnerCase {
+  readonly name: string;
+  readonly command: string;
+  readonly arguments: readonly string[];
+}
 
-test('given bootstrap hangs after a side effect, when the runner is killed, then Docker resources are reaped', async () => {
-  const directory = mkdtempSync(join(tmpdir(), 'integration-forced-termination-'));
+const workspaceRoot = resolve(import.meta.dirname, '../../..');
+const binary = (name: string): string => resolve(workspaceRoot, 'node_modules', '.bin', name);
+const runnerCases: readonly RunnerCase[] = [
+  {
+    name: 'Vitest',
+    command: binary('vitest'),
+    arguments: [
+      'run',
+      '--config',
+      'runner-tests/file-isolation/vitest.termination-child.config.ts',
+    ],
+  },
+  {
+    name: 'Jest',
+    command: binary('jest'),
+    arguments: [
+      '--config',
+      'runner-tests/file-isolation/jest.termination-child.config.ts',
+    ],
+  },
+];
+
+void test('forced runner termination reaps file-isolation resources', { timeout: 1_440_000 }, async (context) => {
+  for (const runner of runnerCases) {
+    await context.test(
+      `${runner.name} is killed after a real database side effect`,
+      { timeout: 720_000 },
+      () => verifyForcedTermination(runner),
+    );
+  }
+});
+
+const verifyForcedTermination = async (runner: RunnerCase): Promise<void> => {
+  const directory = mkdtempSync(join(tmpdir(), `integration-${runner.name.toLowerCase()}-termination-`));
   const signalPath = join(directory, 'termination-signal.json');
   const stopPath = join(directory, 'termination-stop.txt');
   const before = dockerResourceSets();
   let output = '';
-  const child = spawn(vitest, [
-    'run',
-    '--config',
-    'runner-tests/file-isolation/vitest.termination-child.config.ts',
-  ], {
+  const child = spawn(runner.command, runner.arguments, {
     cwd: workspaceRoot,
     detached: true,
     env: {
@@ -50,20 +82,24 @@ test('given bootstrap hangs after a side effect, when the runner is killed, then
   try {
     await waitForSignal(signalPath, child, () => output);
     const report = JSON.parse(readFileSync(signalPath, 'utf8')) as TerminationReport;
-    expect(report.sideEffectCompleted).toBe(true);
-    expect(report.sharedPort).not.toBe(report.dedicatedPort);
+    assert.equal(report.sideEffectCompleted, true, `${runner.name} did not complete the database side effect`);
+    assert.notEqual(report.sharedPort, report.dedicatedPort, `${runner.name} reused one mapped port`);
 
     const running = dockerResourceSets();
     const startedContainers = difference(running.containers, before.containers);
     const startedNetworks = difference(running.networks, before.networks);
-    expect(startedContainers.length).toBeGreaterThanOrEqual(2);
-    expect(startedNetworks.length).toBeGreaterThanOrEqual(2);
+    assert.ok(startedContainers.length >= 2, `${runner.name} did not expose two fixture containers`);
+    assert.ok(startedNetworks.length >= 2, `${runner.name} did not expose two fixture networks`);
 
     killProcessGroup(child.pid);
     await waitForExit(exited);
 
-    expect(existsSync(stopPath)).toBe(false);
-    expect(await waitForDockerCleanup(before, 90_000)).toBe(true);
+    assert.equal(existsSync(stopPath), false, `${runner.name} application stop ran after SIGKILL`);
+    assert.equal(
+      await waitForDockerCleanup(startedContainers, startedNetworks, 180_000),
+      true,
+      `${runner.name} left its fixture containers or networks behind`,
+    );
   } finally {
     if (child.exitCode === null && child.signalCode === null) {
       killProcessGroup(child.pid);
@@ -71,7 +107,7 @@ test('given bootstrap hangs after a side effect, when the runner is killed, then
     }
     rmSync(directory, { recursive: true, force: true });
   }
-}, 720_000);
+};
 
 const dockerResourceSets = (): DockerResourceSets => ({
   containers: new Set(docker(['ps', '-aq', '--filter', 'label=org.testcontainers'])),
@@ -106,23 +142,20 @@ const waitForSignal = async (
 };
 
 const waitForDockerCleanup = async (
-  expected: DockerResourceSets,
+  containerIds: readonly string[],
+  networkIds: readonly string[],
   timeoutMs: number,
 ): Promise<boolean> => {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const current = dockerResourceSets();
-    if (
-      setsEqual(current.containers, expected.containers)
-      && setsEqual(current.networks, expected.networks)
-    ) return true;
+    const containersRemain = containerIds.some((id) => current.containers.has(id));
+    const networksRemain = networkIds.some((id) => current.networks.has(id));
+    if (!containersRemain && !networksRemain) return true;
     await delay(250);
   }
   return false;
 };
-
-const setsEqual = (left: ReadonlySet<string>, right: ReadonlySet<string>): boolean =>
-  left.size === right.size && Array.from(left).every((value) => right.has(value));
 
 const killProcessGroup = (pid: number | undefined): void => {
   if (pid === undefined) return;

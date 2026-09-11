@@ -11,7 +11,10 @@
   "include": [
     "vitest/**/*.ts",
     "failure/**/*.ts",
-    "termination/**/*.ts",
+    "termination/application-lifecycle.ts",
+    "termination/application.vitest.setup.ts",
+    "termination/forced-termination.verifier.test.ts",
+    "termination/vitest-child.sentinel.test.ts",
     "vitest.*.config.ts"
   ]
 }
