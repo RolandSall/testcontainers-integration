@@ -144,10 +144,9 @@ const verifyBootstrapFailureCleanup = (directory: string): void => {
 };
 
 const runForcedTerminationTest = (): void => {
-  const result = spawnSync(binary('vitest'), [
-    'run',
-    '--config',
-    'runner-tests/file-isolation/vitest.termination-verifier.config.ts',
+  const result = spawnSync('node', [
+    '--test',
+    'runner-tests/file-isolation/termination/forced-termination.verifier.test.ts',
   ], {
     cwd: workspaceRoot,
     encoding: 'utf8',
@@ -157,7 +156,7 @@ const runForcedTerminationTest = (): void => {
   process.stdout.write(result.stdout);
   process.stderr.write(result.stderr);
   if (result.status !== 0) {
-    throw new Error('The forced-termination Vitest suite failed');
+    throw new Error('The forced-termination runner suite failed');
   }
 };
 

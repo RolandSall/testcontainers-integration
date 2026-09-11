@@ -1,8 +1,8 @@
 import { fromContainer, postgreSql } from '@integration-testing/testcontainers';
-import { defineContainerProject } from '@integration-testing/testcontainers/vitest';
+import { defineContainerProject } from '@integration-testing/testcontainers/jest';
 
 export default defineContainerProject({
-  include: ['runner-tests/file-isolation/termination/vitest-child.sentinel.test.ts'],
+  include: ['**/runner-tests/file-isolation/termination/jest-child.sentinel.test.ts'],
   containers: {
     sharedDatabase: postgreSql({
       isolation: 'shared',
@@ -14,13 +14,22 @@ export default defineContainerProject({
     }),
   },
   application: {
-    setup: './runner-tests/file-isolation/termination/application.vitest.setup.ts',
+    setup: './runner-tests/file-isolation/termination/application.jest.setup.ts',
     environment: {
       SHARED_DATABASE_URL: fromContainer('sharedDatabase', 'connectionUri'),
       DATABASE_URL: fromContainer('dedicatedDatabase', 'connectionUri'),
     },
   },
-  hookTimeout: 600_000,
-  testTimeout: 30_000,
-  vitest: { maxWorkers: 1 },
+  jest: {
+    rootDir: '../..',
+    maxWorkers: 1,
+    moduleNameMapper: { '^(\\.{1,2}/.*)\\.js$': '$1' },
+    transform: {
+      '^.+\\.tsx?$': ['ts-jest', {
+        tsconfig: './runner-tests/file-isolation/tsconfig.jest.json',
+        useESM: false,
+      }],
+    },
+    testTimeout: 30_000,
+  },
 });

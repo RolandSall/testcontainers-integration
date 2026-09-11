@@ -1,12 +1,11 @@
 import { writeFile } from 'node:fs/promises';
 import { Client } from 'pg';
-import { installVitestApplicationIntegrationTestSupport } from '@integration-testing/testcontainers/vitest';
 
 const signalPath = process.env.FILE_ISOLATION_TERMINATION_SIGNAL;
 const stopPath = process.env.FILE_ISOLATION_TERMINATION_STOP;
 
-installVitestApplicationIntegrationTestSupport({
-  start: async () => {
+export const terminationApplicationLifecycle = {
+  start: async (): Promise<never> => {
     const connectionString = process.env.DATABASE_URL;
     const sharedConnectionString = process.env.SHARED_DATABASE_URL;
     if (connectionString === undefined) throw new Error('DATABASE_URL is required');
@@ -28,11 +27,11 @@ installVitestApplicationIntegrationTestSupport({
       await client.end();
     }
 
-    // Simulate an application bootstrap that never resolves. The verifier kills
-    // the runner only after it observes the completed database side effect.
+    // Simulate an application bootstrap that never resolves. The parent test
+    // kills this runner only after observing the completed database side effect.
     return new Promise<never>(() => undefined);
   },
-  stop: async () => {
+  stop: async (): Promise<void> => {
     if (stopPath !== undefined) await writeFile(stopPath, 'called');
   },
-});
+};

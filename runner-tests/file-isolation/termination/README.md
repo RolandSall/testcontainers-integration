@@ -1,23 +1,27 @@
 # Forced-termination test
 
-This directory contains one actual verifier test and two child-process fixtures.
+This directory contains one runner-neutral verifier test and runner-specific child-process fixtures.
 
 | File | Role |
 | --- | --- |
-| [`forced-termination.verifier.test.ts`](./forced-termination.verifier.test.ts) | The real Vitest test. It starts a child Vitest process, asserts that the database side effect and Docker resources exist, sends `SIGKILL`, asserts that application `stop()` did not run, and waits for Ryuk cleanup. |
-| [`application.setup.ts`](./application.setup.ts) | Application fixture loaded inside the child process. It writes and reads a PostgreSQL row, signals the parent test, and leaves startup pending. |
-| [`startup.termination.file-isolation.test.ts`](./startup.termination.file-isolation.test.ts) | A sentinel that gives the child Vitest process a test file to collect. Its body must remain unreachable because application startup hangs first. |
+| [`forced-termination.verifier.test.ts`](./forced-termination.verifier.test.ts) | The real Node.js test. It runs the same assertions against separate Vitest and Jest child processes. |
+| [`application-lifecycle.ts`](./application-lifecycle.ts) | Shared application behavior used by both child runners. It writes and reads a PostgreSQL row, signals the parent test, and leaves startup pending. |
+| [`application.vitest.setup.ts`](./application.vitest.setup.ts) | Installs the shared application behavior into the Vitest lifecycle adapter. |
+| [`application.jest.setup.ts`](./application.jest.setup.ts) | Installs the shared application behavior into the Jest lifecycle adapter. |
+| [`vitest-child.sentinel.test.ts`](./vitest-child.sentinel.test.ts) | Gives the Vitest child a test file to collect. Its body must remain unreachable because application startup hangs first. |
+| [`jest-child.sentinel.test.ts`](./jest-child.sentinel.test.ts) | Provides the equivalent sentinel for the Jest child. |
 
 The processes are deliberately separate:
 
 ```text
-Parent Vitest verifier test
-  -> starts child Vitest process
-  -> child starts shared and dedicated containers
-  -> child application performs a database side effect and hangs
-  -> parent asserts the resources exist
-  -> parent kills the child process
-  -> parent asserts Testcontainers eventually removes the resources
+Parent Node.js verifier test
+  -> runs the scenario with a Vitest child
+  -> runs the same scenario with a Jest child
+  -> each child starts shared and dedicated containers
+  -> each child performs a database side effect and hangs
+  -> parent asserts that child's resources exist
+  -> parent kills that child process
+  -> parent asserts Testcontainers removes those exact resources
 ```
 
 Run only this test with:
