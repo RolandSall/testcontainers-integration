@@ -39,22 +39,22 @@ const runs: readonly FixtureRun[] = [
   {
     suite: 'vitest-annotation',
     command: binary('vitest'),
-    arguments: ['run', '--config', 'runner-tests/isolation/vitest.annotation.config.ts'],
+    arguments: ['run', '--config', 'runner-tests/file-isolation/vitest.annotation.config.ts'],
   },
   {
     suite: 'jest-annotation',
     command: binary('jest'),
-    arguments: ['--config', 'runner-tests/isolation/jest.annotation.config.ts'],
+    arguments: ['--config', 'runner-tests/file-isolation/jest.annotation.config.ts'],
   },
   {
     suite: 'vitest-project',
     command: binary('vitest'),
-    arguments: ['run', '--config', 'runner-tests/isolation/vitest.project.config.ts'],
+    arguments: ['run', '--config', 'runner-tests/file-isolation/vitest.project.config.ts'],
   },
   {
     suite: 'jest-project',
     command: binary('jest'),
-    arguments: ['--config', 'runner-tests/isolation/jest.project.config.ts'],
+    arguments: ['--config', 'runner-tests/file-isolation/jest.project.config.ts'],
   },
 ];
 
@@ -129,7 +129,7 @@ const verifyBootstrapFailureCleanup = (directory: string): void => {
   const run: FixtureRun = {
     suite: 'vitest-bootstrap-failure',
     command: binary('vitest'),
-    arguments: ['run', '--config', 'runner-tests/isolation/vitest.failure.config.ts'],
+    arguments: ['run', '--config', 'runner-tests/file-isolation/vitest.failure.config.ts'],
   };
   const result = spawnSync(run.command, run.arguments, {
     cwd: workspaceRoot,
@@ -163,7 +163,7 @@ const verifyForcedTerminationCleanup = async (directory: string): Promise<void> 
   const child = spawn(binary('vitest'), [
     'run',
     '--config',
-    'runner-tests/isolation/vitest.termination.config.ts',
+    'runner-tests/file-isolation/vitest.termination.config.ts',
   ], {
     cwd: workspaceRoot,
     detached: true,
