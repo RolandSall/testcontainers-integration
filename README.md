@@ -288,6 +288,22 @@ Name the test with the default `.container.integration.test.ts` suffix and use a
 export class OrderApplicationIntegrationTest {}
 ```
 
+`@RequiredContainer(...)` declares the infrastructure needed by the test file. Add
+`@ApplicationIntegrationTest` only when the library should also start the configured
+application under test for that file.
+
+For a container-only test that connects to the resources directly, omit the application marker:
+
+```ts
+@RequiredContainer({
+  database: { kind: Container.PostgreSql, isolation: 'dedicated' },
+})
+export class DatabaseIntegrationTest {}
+```
+
+Project configuration mode does not use either decorator. Its configured containers and
+application apply automatically to every file matched by `include`.
+
 The complete Vitest and Jest configurations below register the required lifecycle hooks. For a different filename convention, set `testFileSuffix` and update the runner's `include` or `testMatch` pattern. Point your IDE to that same runner config. A Jest `tsconfig.jest.json` must inherit the decorator setting; `emitDecoratorMetadata` is not required by this library.
 
 ### Vitest annotation setup
@@ -354,7 +370,8 @@ test('stores and reads a row in PostgreSQL', async () => {
 npx vitest run --config vitest.annotation.config.ts
 ```
 
-Keep one `@ApplicationIntegrationTest` marker class per test file.
+On files that start the configured application, keep one `@ApplicationIntegrationTest` marker
+on the same class as `@RequiredContainer(...)`. Omit it from container-only files.
 
 ### Jest annotation setup
 
