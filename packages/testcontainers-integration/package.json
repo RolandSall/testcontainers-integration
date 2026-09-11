@@ -1,6 +1,6 @@
 {
   "name": "@integration-testing/testcontainers",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0",
   "description": "Typed Testcontainers lifecycle for NestJS, Vitest, Jest, and Node.js backends",
   "author": "Roland Salloum",
   "keywords": ["testcontainers", "integration-testing", "nestjs", "vitest", "jest", "docker"],

@@ -91,7 +91,7 @@
     },
     "packages/testcontainers-integration": {
       "name": "@integration-testing/testcontainers",
-      "version": "0.1.0-beta.1",
+      "version": "0.1.0",
       "dependencies": {
         "@testcontainers/mongodb": "12.1.0",
         "@testcontainers/mssqlserver": "12.1.0",

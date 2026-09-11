@@ -6,7 +6,7 @@ on:
       npm-tag:
         description: npm distribution tag
         required: true
-        default: beta
+        default: latest
 
 permissions:
   contents: read
@@ -35,6 +35,6 @@ jobs:
       - run: bun run verify
       - run: bun run release:check
       - name: Preflight npm package contents
-        run: npm publish packages/testcontainers-integration --dry-run --access public --tag "${{ inputs.npm-tag }}"
+        run: npm publish ./packages/testcontainers-integration --dry-run --access public --tag "${{ inputs.npm-tag }}"
       - name: Publish packages with provenance
-        run: npm publish packages/testcontainers-integration --provenance --access public --tag "${{ inputs.npm-tag }}"
+        run: npm publish ./packages/testcontainers-integration --provenance --access public --tag "${{ inputs.npm-tag }}"
