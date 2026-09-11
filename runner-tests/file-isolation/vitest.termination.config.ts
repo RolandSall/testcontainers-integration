@@ -2,7 +2,7 @@ import { fromContainer, postgreSql } from '@integration-testing/testcontainers';
 import { defineContainerProject } from '@integration-testing/testcontainers/vitest';
 
 export default defineContainerProject({
-  include: ['runner-tests/isolation/termination/*.termination.file-isolation.test.ts'],
+  include: ['runner-tests/file-isolation/termination/*.termination.file-isolation.test.ts'],
   containers: {
     sharedDatabase: postgreSql({
       isolation: 'shared',
@@ -14,7 +14,7 @@ export default defineContainerProject({
     }),
   },
   application: {
-    setup: './runner-tests/isolation/termination/application.setup.ts',
+    setup: './runner-tests/file-isolation/termination/application.setup.ts',
     environment: {
       SHARED_DATABASE_URL: fromContainer('sharedDatabase', 'connectionUri'),
       DATABASE_URL: fromContainer('dedicatedDatabase', 'connectionUri'),
