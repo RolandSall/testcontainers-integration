@@ -1,5 +1,5 @@
-import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -20,17 +20,6 @@ interface FileReport {
   readonly primaryValue: string;
   readonly auditValue: string;
   readonly receivedMessage: string;
-}
-
-interface TerminationReport {
-  readonly sideEffectCompleted: boolean;
-  readonly dedicatedPort: number;
-  readonly sharedPort: number;
-}
-
-interface DockerResourceSets {
-  readonly containers: ReadonlySet<string>;
-  readonly networks: ReadonlySet<string>;
 }
 
 const workspaceRoot = process.cwd();
@@ -154,91 +143,29 @@ const verifyBootstrapFailureCleanup = (directory: string): void => {
   console.log('bootstrap failure: side effect completed and containers/networks were cleaned');
 };
 
-const verifyForcedTerminationCleanup = async (directory: string): Promise<void> => {
-  const before = dockerResourceSets();
-  const expectedResources = serializeDockerResources(before);
-  const signalPath = join(directory, 'termination-signal.json');
-  const stopPath = join(directory, 'termination-stop.txt');
-  let output = '';
-  const child = spawn(binary('vitest'), [
+const runForcedTerminationTest = (): void => {
+  const result = spawnSync(binary('vitest'), [
     'run',
     '--config',
-    'runner-tests/file-isolation/vitest.termination.config.ts',
+    'runner-tests/file-isolation/vitest.termination-verifier.config.ts',
   ], {
     cwd: workspaceRoot,
-    detached: true,
-    env: {
-      ...process.env,
-      FILE_ISOLATION_TERMINATION_SIGNAL: signalPath,
-      FILE_ISOLATION_TERMINATION_STOP: stopPath,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+    timeout: 900_000,
+    maxBuffer: 20 * 1024 * 1024,
   });
-  child.stdout.setEncoding('utf8');
-  child.stderr.setEncoding('utf8');
-  child.stdout.on('data', (chunk: string) => { output += chunk; });
-  child.stderr.on('data', (chunk: string) => { output += chunk; });
-  const exited = new Promise<void>((resolveExit, rejectExit) => {
-    child.once('exit', () => resolveExit());
-    child.once('error', rejectExit);
-  });
-
-  try {
-    await waitForFile(signalPath, child, () => output);
-    const report = JSON.parse(readFileSync(signalPath, 'utf8')) as TerminationReport;
-    if (!report.sideEffectCompleted) {
-      throw new Error('The forced-termination fixture did not complete its database side effect');
-    }
-    if (report.sharedPort === report.dedicatedPort) {
-      throw new Error('The forced-termination fixture did not start distinct shared and dedicated containers');
-    }
-
-    const running = dockerResourceSets();
-    const startedContainers = difference(running.containers, before.containers);
-    const startedNetworks = difference(running.networks, before.networks);
-    if (startedContainers.length < 2 || startedNetworks.length < 2) {
-      throw new Error(
-        `The forced-termination fixture exposed ${startedContainers.length} new containers and ${startedNetworks.length} new networks; expected at least two of each`,
-      );
-    }
-
-    killProcessGroup(child.pid);
-    await waitForExit(exited);
-    process.stdout.write(output);
-    if (existsSync(stopPath)) {
-      throw new Error('Application stop unexpectedly ran after the runner was killed');
-    }
-    waitForDockerCleanup(expectedResources, 'Forced-termination fixture', 90_000);
-    console.log(
-      `forced termination: database side effect completed; ${startedContainers.length} containers and ${startedNetworks.length} networks were reaped after SIGKILL`,
-    );
-  } finally {
-    if (child.exitCode === null && child.signalCode === null) {
-      killProcessGroup(child.pid);
-      await waitForExit(exited).catch(() => undefined);
-    }
+  process.stdout.write(result.stdout);
+  process.stderr.write(result.stderr);
+  if (result.status !== 0) {
+    throw new Error('The forced-termination Vitest suite failed');
   }
 };
 
 const dockerResources = (): string => {
-  return serializeDockerResources(dockerResourceSets());
+  const containers = docker(['ps', '-aq', '--filter', 'label=org.testcontainers']);
+  const networks = docker(['network', 'ls', '-q', '--filter', 'label=org.testcontainers']);
+  return `${containers}\n--networks--\n${networks}`;
 };
-
-const dockerResourceSets = (): DockerResourceSets => ({
-  containers: new Set(lines(docker(['ps', '-aq', '--filter', 'label=org.testcontainers']))),
-  networks: new Set(lines(docker(['network', 'ls', '-q', '--filter', 'label=org.testcontainers']))),
-});
-
-const serializeDockerResources = ({ containers, networks }: DockerResourceSets): string => [
-  ...Array.from(containers).sort(),
-  '--networks--',
-  ...Array.from(networks).sort(),
-].join('\n');
-
-const lines = (value: string): readonly string[] => value.split('\n').filter(Boolean);
-
-const difference = (current: ReadonlySet<string>, previous: ReadonlySet<string>): readonly string[] =>
-  Array.from(current).filter((value) => !previous.has(value));
 
 const docker = (arguments_: readonly string[]): string => {
   const result = spawnSync('docker', arguments_, { encoding: 'utf8' });
@@ -257,64 +184,23 @@ const waitForDockerCleanup = (expected: string, fixture: string, timeoutMs = 30_
   throw new Error(`${fixture} left Testcontainers containers or networks behind`);
 };
 
-const waitForFile = async (
-  path: string,
-  child: ReturnType<typeof spawn>,
-  output: () => string,
-): Promise<void> => {
-  const deadline = Date.now() + 600_000;
-  while (Date.now() < deadline) {
-    if (existsSync(path)) return;
-    if (child.exitCode !== null || child.signalCode !== null) {
-      throw new Error(`The forced-termination fixture exited before reaching the hang:\n${output()}`);
-    }
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
-  }
-  throw new Error(`The forced-termination fixture did not reach the hang:\n${output()}`);
-};
-
-const killProcessGroup = (pid: number | undefined): void => {
-  if (pid === undefined) return;
-  try {
-    process.kill(-pid, 'SIGKILL');
-  } catch {
-    process.kill(pid, 'SIGKILL');
-  }
-};
-
-const waitForExit = async (exited: Promise<void>): Promise<void> => {
-  await Promise.race([
-    exited,
-    new Promise<never>((_resolve, reject) => {
-      setTimeout(() => reject(new Error('The forced-termination fixture process did not exit after SIGKILL')), 30_000);
-    }),
-  ]);
-};
-
-const main = async (): Promise<void> => {
+const main = (): void => {
   const reportDirectory = mkdtempSync(join(tmpdir(), 'integration-file-isolation-'));
   try {
-    const terminationOnly = process.argv.includes('--termination-only');
-    if (!terminationOnly) {
-      for (const run of runs) {
-        const reportPath = join(reportDirectory, `${run.suite}.jsonl`);
-        const result = runFixture(run, reportPath);
-        if (result.status !== 0) {
-          throw new Error(`${run.suite} file-isolation fixture failed`);
-        }
-        verifyReports(run.suite, readReports(reportPath));
+    for (const run of runs) {
+      const reportPath = join(reportDirectory, `${run.suite}.jsonl`);
+      const result = runFixture(run, reportPath);
+      if (result.status !== 0) {
+        throw new Error(`${run.suite} file-isolation fixture failed`);
       }
-      verifyBootstrapFailureCleanup(reportDirectory);
+      verifyReports(run.suite, readReports(reportPath));
     }
-    await verifyForcedTerminationCleanup(reportDirectory);
+    verifyBootstrapFailureCleanup(reportDirectory);
+    runForcedTerminationTest();
   } finally {
     rmSync(reportDirectory, { recursive: true, force: true });
   }
-  console.log(
-    process.argv.includes('--termination-only')
-      ? 'Forced-termination cleanup fixture passed'
-      : 'Jest and Vitest annotation and project file-isolation fixtures passed',
-  );
+  console.log('Jest and Vitest annotation and project file-isolation fixtures passed');
 };
 
-await main();
+main();

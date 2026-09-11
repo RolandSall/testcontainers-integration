@@ -21,7 +21,7 @@
     "test:docker": "nx run testcontainers-integration:test-docker",
     "test:examples:docker": "bun run build && bun --cwd examples/vitest-project integration && bun --cwd examples/jest-project integration && bun --cwd examples/vitest-annotation integration && bun --cwd examples/jest-annotation integration && bun scripts/verify-file-isolation.ts",
     "test:file-isolation:docker": "bun run build && bun scripts/verify-file-isolation.ts",
-    "test:termination-cleanup:docker": "bun run build && bun scripts/verify-file-isolation.ts --termination-only",
+    "test:termination-cleanup:docker": "bun run build && vitest run --config runner-tests/file-isolation/vitest.termination-verifier.config.ts",
     "lint": "eslint packages examples runner-tests scripts --max-warnings=0",
     "verify": "bun run audit && bun run typecheck && bun run lint && bun run test && bun run test:runners && bun run build && bun run pack:check",
     "pack:check": "bun scripts/verify-packages.ts",

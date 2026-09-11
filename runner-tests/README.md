@@ -32,7 +32,7 @@ These tests answer whether each runner adapter loads and wires lifecycle hooks c
 | [`jest-project`](./file-isolation/jest-project) | The same shared and dedicated behavior using Jest project configuration instead of annotations. |
 | [`vitest-project`](./file-isolation/vitest-project) | The same project-configuration behavior under Vitest. |
 | [`failure`](./file-isolation/failure) | A real database side effect occurs before application bootstrap rejects, after which normal in-process cleanup removes file-owned resources and global teardown removes shared resources. |
-| [`termination`](./file-isolation/termination) | Application bootstrap performs a real database side effect and hangs. The external verifier sends `SIGKILL` and proves that Testcontainers' Ryuk reaper eventually removes the containers and networks. |
+| [`termination`](./file-isolation/termination) | A parent Vitest test proves the database side effect, sends `SIGKILL` to a hung child Vitest process, and asserts that Testcontainers' Ryuk reaper eventually removes the containers and networks. |
 | [`support`](./file-isolation/support) | Shared backend, application setup, reporting, PostgreSQL assertions, and RabbitMQ assertions used by the four parallel runner fixtures. |
 
 The four runner configurations are kept at the root of `file-isolation` so the complete matrix is visible together:
@@ -45,7 +45,8 @@ The four runner configurations are kept at the root of `file-isolation` so the c
 The normal rejection and forced-termination configurations are:
 
 - [`vitest.failure.config.ts`](./file-isolation/vitest.failure.config.ts)
-- [`vitest.termination.config.ts`](./file-isolation/vitest.termination.config.ts)
+- [`vitest.termination-verifier.config.ts`](./file-isolation/vitest.termination-verifier.config.ts) runs the real parent assertion test.
+- [`vitest.termination-child.config.ts`](./file-isolation/vitest.termination-child.config.ts) configures the child process that is deliberately killed.
 
 ## Related verification boundaries
 
