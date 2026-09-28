@@ -166,6 +166,10 @@ No separate dashboard package, reporter registration, or browser dependency is n
 
 _Captured from a real Vitest run using a shared RabbitMQ container and a file-dedicated PostgreSQL container. Select the image to open the full-size dashboard._
 
+[![Live Tests view showing a running test, duration filters, and comparisons with the run average](https://raw.githubusercontent.com/RolandSall/testcontainers-integration/main/docs/dashboard-tests.jpg)](https://github.com/RolandSall/testcontainers-integration/blob/main/docs/dashboard-tests.jpg)
+
+_The live Tests view shows the currently running test, completed test durations, status and name filters, and each duration's difference from the run average._
+
 Advanced settings:
 
 ```ts
