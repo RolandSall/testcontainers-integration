@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { dirname, resolve } from 'node:path';
 import type { AddressInfo } from 'node:net';
+import { pathToFileURL } from 'node:url';
 import type { SerializedIntegrationDashboardOptions } from './dashboard-config.js';
 import {
   dashboardErrorMessage,
@@ -87,7 +88,7 @@ export class DashboardSession implements IntegrationTestEventSink {
       scope: 'runner',
       message: `${this.runner === 'jest' ? 'Jest' : 'Vitest'} run started`,
     });
-    process.stdout.write(`[integration:dashboard] ${dashboardUrl}\n`);
+    process.stdout.write(`[integration:dashboard] Live report: ${dashboardUrl}\n`);
     if (this.options.open && process.env.CI === undefined) openBrowser(dashboardUrl);
   }
 
@@ -150,7 +151,9 @@ export class DashboardSession implements IntegrationTestEventSink {
     let report: string | undefined;
     try {
       report = await this.writeReport('index.html');
-      process.stdout.write(`[integration:dashboard] report: ${report}\n`);
+      process.stdout.write(
+        `[integration:dashboard] Last run report: ${pathToFileURL(report).href}\n`,
+      );
     } catch (error) {
       process.stderr.write(
         `[integration:dashboard] report generation failed: ${dashboardErrorMessage(error)}\n`,
