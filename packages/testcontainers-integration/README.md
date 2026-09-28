@@ -151,6 +151,17 @@ export default defineAnnotationProject({
 
 No separate dashboard package, reporter registration, or browser dependency is needed. Run the same Jest or Vitest command you already use. When the run begins, the terminal prints **Live report** with a token-protected `127.0.0.1` URL. After global teardown finishes, it prints **Last run report** with a clickable `file://` URL for the self-contained report under `test-results/integration-testing/<run-id>/index.html`. The live server closes with the runner; the saved report remains available without a server.
 
+```text
+[integration:dashboard] ------------------------------------------------------------
+[integration:dashboard] Live report: http://127.0.0.1:<port>/session/<token>
+[integration:dashboard] ------------------------------------------------------------
+
+# After tests, application shutdown, and container cleanup:
+[integration:dashboard] ------------------------------------------------------------
+[integration:dashboard] Last run report: file:///.../index.html
+[integration:dashboard] ------------------------------------------------------------
+```
+
 [![Local integration-test dashboard showing real Vitest, RabbitMQ, and PostgreSQL results](https://raw.githubusercontent.com/RolandSall/testcontainers-integration/main/docs/dashboard.png)](https://github.com/RolandSall/testcontainers-integration/blob/main/docs/dashboard.png)
 
 _Captured from a real Vitest run using a shared RabbitMQ container and a file-dedicated PostgreSQL container. Select the image to open the full-size dashboard._
@@ -216,6 +227,8 @@ test-results/
 ```
 
 The collector binds only to `127.0.0.1`. Browser reads and worker event ingestion use independent random tokens, and the worker token registry is stored in a permission-restricted temporary file. Dashboard delivery and report-generation failures warn without changing test results, worker counts, container isolation, or cleanup.
+
+Opening, refreshing, or closing the browser page does not affect Jest, Vitest, application shutdown, or container cleanup. The browser receives read-only state through a separate token. Only runner workers possess the event-ingestion token, and the dashboard has no endpoint that starts, stops, retries, or cancels tests or infrastructure.
 
 This is test-run visibility, not full infrastructure observability. It does not sample Docker CPU, memory, network, or disk statistics, and it does not observe SQL queries, HTTP calls, or internal application operations. Use Docker statistics and application tracing such as OpenTelemetry for those concerns. [Testcontainers Desktop](https://testcontainers.com/desktop/docs/) provides broader container-session tooling; this dashboard focuses on Jest/Vitest test cases and their explicit shared/dedicated relationships.
 
