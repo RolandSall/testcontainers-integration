@@ -22,6 +22,7 @@ import {
 import { renderDashboardDocument } from './dashboard-html.js';
 
 const MAX_REQUEST_BYTES = 1_048_576;
+const TERMINAL_SEPARATOR = '------------------------------------------------------------';
 
 /** Owns one local dashboard server and its self-contained reports. */
 export class DashboardSession implements IntegrationTestEventSink {
@@ -88,7 +89,7 @@ export class DashboardSession implements IntegrationTestEventSink {
       scope: 'runner',
       message: `${this.runner === 'jest' ? 'Jest' : 'Vitest'} run started`,
     });
-    process.stdout.write(`[integration:dashboard] Live report: ${dashboardUrl}\n`);
+    writeTerminalReportLink('Live report', dashboardUrl);
     if (this.options.open && process.env.CI === undefined) openBrowser(dashboardUrl);
   }
 
@@ -151,9 +152,7 @@ export class DashboardSession implements IntegrationTestEventSink {
     let report: string | undefined;
     try {
       report = await this.writeReport('index.html');
-      process.stdout.write(
-        `[integration:dashboard] Last run report: ${pathToFileURL(report).href}\n`,
-      );
+      writeTerminalReportLink('Last run report', pathToFileURL(report).href);
     } catch (error) {
       process.stderr.write(
         `[integration:dashboard] report generation failed: ${dashboardErrorMessage(error)}\n`,
@@ -243,6 +242,15 @@ export class DashboardSession implements IntegrationTestEventSink {
     return resolve(this.root, this.options.outputDirectory, this.runId, fileName);
   }
 }
+
+const writeTerminalReportLink = (label: string, url: string): void => {
+  process.stdout.write([
+    `[integration:dashboard] ${TERMINAL_SEPARATOR}`,
+    `[integration:dashboard] ${label}: ${url}`,
+    `[integration:dashboard] ${TERMINAL_SEPARATOR}`,
+    '',
+  ].join('\n'));
+};
 
 const readBody = async (request: IncomingMessage): Promise<string> => {
   const chunks: Uint8Array[] = [];
