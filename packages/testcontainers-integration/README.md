@@ -192,7 +192,7 @@ export default defineContainerProject({
 1. Open the printed local URL while the tests are running.
 2. Use **Containers** to see which files selected each shared or dedicated container, its mapped ports, startup status, and optional logs.
 3. Use **Tests** to search, filter, sort, paginate, and compare individual runner-reported test durations with the run average.
-4. Use **Lifecycle** to separate container startup, application bootstrap, test-file execution, failures, and cleanup timing.
+4. Use **Lifecycle** to separate container startup, application bootstrap, and complete test-file execution. A **Test file execution** bar represents the whole file, not one individual test.
 5. In CI, upload the configured output directory as an artifact. The collector still uses loopback communication, but it never attempts to open a browser when `CI` is set.
 
 Because the saved report is self-contained and uses no external CDN, it can be opened later without running the test suite or dashboard server.
