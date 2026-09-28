@@ -197,13 +197,9 @@ export default defineContainerProject({
 
 Because the saved report is self-contained and uses no external CDN, it can be opened later without running the test suite or dashboard server.
 
-### WebStorm and partial test runs
+### Run a subset of tests
 
-The dashboard opens in a normal browser, not inside the WebStorm test-results panel. With `dashboard: { open: true }`, the library asks the operating system to open the live page automatically. With `open: false`, click the **Live report** URL printed in WebStorm's Run tool window. When the run finishes, click **Last run report** to reopen the permanent HTML report.
-
-You do not need to run the complete suite. The dashboard records exactly the files and test cases selected by Jest or Vitest, provided the run uses the integration-test configuration containing `defineContainerProject` or `defineAnnotationProject`:
-
-It does not aggregate tests from separate unit-test or other runner configurations. Those tests continue to run normally, but they do not appear in this integration-test dashboard.
+The dashboard records the files and tests selected by a Jest or Vitest command that uses the generated integration configuration. It does not aggregate separate unit-test or runner configurations.
 
 ```sh
 # Vitest: one file or one matching test name
@@ -215,32 +211,25 @@ jest --config jest.integration.config.ts test/orders.integration.test.ts
 jest --config jest.integration.config.ts -t "creates an order"
 ```
 
-The same applies to WebStorm's file, suite, and individual-test actions when their run configuration uses that Jest or Vitest config file. If WebStorm launches a generic runner configuration that bypasses the integration config, neither the container lifecycle nor the dashboard is registered. Shared containers required by the selected project are started during global setup; file-dedicated containers are started only for test files that actually execute.
+Shared containers start during global setup; dedicated containers start only for test files that execute.
 
-The dashboard shows run and test status, file and test-case timings, application-bootstrap and container-startup durations, shared or file-dedicated container ownership, mapped ports, execution timelines, slow tests, lifecycle logs, and peak observed file parallelism. Its summary cards are interactive: test-status cards filter the Tests table, while Containers and Peak files open their corresponding views. The Tests tab keeps test-name, file-name, and available-status filters in their respective column headers. It also provides sortable columns and client-side pagination with 5, 10, or 15 rows per page. A prominent card shows the average across completed tests that reported timing data; each timed row uses a red upward or green downward delta to show its difference from that average. The Containers tab intentionally reports infrastructure facts without claiming that a particular file or test accessed a container.
+### What the dashboard reports
 
-The timing categories are intentionally separate:
+- **Containers:** runtime facts, mapped ports, startup duration, failures, and optional logs without claiming per-test usage.
+- **Tests:** status and runner-reported duration, with filtering, sorting, pagination, and comparison with the run average.
+- **Lifecycle:** container startup, application bootstrap, test-file execution, cleanup, and observed file parallelism.
 
-- **Test duration** comes directly from the Jest or Vitest test-case result. It does not include global container startup or the application's `beforeAll` bootstrap.
-- **Application bootstrap** is measured around the configured application `start()` callback.
-- **Container startup** is measured around each Testcontainers adapter's `start()` operation, including readiness waiting.
-- **Test-file duration** comes from the runner's file/module result and may include that file's hooks. It is shown separately from individual test duration.
+Container and application startup are measured separately from test duration. Raw container output appears only with `containerLogs: true`.
 
-Each container has a foldable **Show logs** section. Raw container output is included there only when the existing `containerLogs: true` option is enabled. Named containers, including custom containers that write through the supplied logger, are correlated with their own output. Reports can also contain test names, failure messages, and application-provided container log text. They remain local, use no external CDN, and should not be committed. Add the configured output directory to `.gitignore`; the repository default is:
+Reports remain local and may contain test names, failures, and container output. Do not commit them:
 
 ```gitignore
 test-results/
 ```
 
-The collector binds only to `127.0.0.1`. Browser reads and worker event ingestion use independent random tokens, and the worker token registry is stored in a permission-restricted temporary file. Dashboard delivery and report-generation failures warn without changing test results, worker counts, container isolation, or cleanup.
+The collector is loopback-only and the browser is read-only; opening or closing it cannot control tests or infrastructure. The dashboard does not inspect Docker resource usage, SQL, HTTP, or application internals. Hard process termination may prevent the final HTML report, while Testcontainers cleanup remains independent.
 
-Opening, refreshing, or closing the browser page does not affect Jest, Vitest, application shutdown, or container cleanup. The browser receives read-only state through a separate token. Only runner workers possess the event-ingestion token, and the dashboard has no endpoint that starts, stops, retries, or cancels tests or infrastructure.
-
-This is test-run visibility, not full infrastructure observability. It does not sample Docker CPU, memory, network, or disk statistics, and it does not observe SQL queries, HTTP calls, or internal application operations. Use Docker statistics and application tracing such as OpenTelemetry for those concerns. [Testcontainers Desktop](https://testcontainers.com/desktop/docs/) provides broader container-session tooling; this dashboard focuses on Jest/Vitest test cases and their explicit shared/dedicated relationships.
-
-Ordinary startup and test failures still produce partial reports. `SIGKILL` prevents JavaScript report finalization, so a completed HTML file is not guaranteed after hard process termination. Testcontainers' Ryuk cleanup remains independent from the dashboard.
-
-Dashboard support is currently limited to configurations generated by `defineContainerProject` and `defineAnnotationProject` for Jest and Vitest. Direct `ContainerRuntime`, Cucumber, Node's test runner, and custom harness behavior is unchanged.
+Dashboard support is limited to Jest and Vitest configurations generated by `defineContainerProject` or `defineAnnotationProject`.
 
 ### Compatibility with 0.1.0
 
@@ -747,7 +736,7 @@ Run it with:
 npx jest --config jest.integration.config.ts --runInBand
 ```
 
-Jest only auto-discovers conventional names such as `jest.config.ts`. If you keep the integration-specific filename, point WebStorm at it or add a conventional forwarding file:
+Jest only auto-discovers conventional names such as `jest.config.ts`. If you keep the integration-specific filename, pass it with `--config` or add a conventional forwarding file:
 
 ```ts
 // jest.config.ts
