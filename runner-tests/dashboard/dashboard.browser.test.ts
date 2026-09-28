@@ -154,6 +154,10 @@ void test('live and saved dashboards render updates, charts, failures, filtering
     assert.equal(await devtools.evaluate<string>("document.querySelector('[data-tab][aria-selected=true]').dataset.tab"), 'containers');
     await devtools.evaluate("document.querySelector('[data-summary-action=\"lifecycle\"]').click()");
     assert.equal(await devtools.evaluate<string>("document.querySelector('[data-tab][aria-selected=true]').dataset.tab"), 'lifecycle');
+    assert.match(
+      await devtools.evaluate<string>("document.querySelector('#lifecycle-view').innerText"),
+      /Test file execution · parallel\.dashboard\.test\.ts/,
+    );
     await devtools.evaluate("document.querySelector('[data-summary-status=\"all\"]').click()");
     assert.equal(await devtools.evaluate<string>("document.querySelector('[data-tab][aria-selected=true]').dataset.tab"), 'tests');
 
