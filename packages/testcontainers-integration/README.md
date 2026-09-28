@@ -151,7 +151,9 @@ export default defineAnnotationProject({
 
 No separate dashboard package, reporter registration, or browser dependency is needed. Run the same Jest or Vitest command you already use. When the run begins, the library prints a token-protected `127.0.0.1` URL. It does not open a browser unless you explicitly request it. After global teardown finishes, it saves a self-contained report under `test-results/integration-testing/<run-id>/index.html`.
 
-![Local integration-test dashboard](https://raw.githubusercontent.com/RolandSall/testcontainers-integration/main/docs/dashboard.png)
+[![Local integration-test dashboard showing real Vitest, RabbitMQ, and PostgreSQL results](https://raw.githubusercontent.com/RolandSall/testcontainers-integration/main/docs/dashboard.png)](https://github.com/RolandSall/testcontainers-integration/blob/main/docs/dashboard.png)
+
+_Captured from a real Vitest run using a shared RabbitMQ container and a file-dedicated PostgreSQL container. Select the image to open the full-size dashboard._
 
 Advanced settings:
 
