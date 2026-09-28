@@ -149,7 +149,7 @@ export default defineAnnotationProject({
 });
 ```
 
-No separate dashboard package, reporter registration, or browser dependency is needed. Run the same Jest or Vitest command you already use. When the run begins, the library prints a token-protected `127.0.0.1` URL. It does not open a browser unless you explicitly request it. After global teardown finishes, it saves a self-contained report under `test-results/integration-testing/<run-id>/index.html`.
+No separate dashboard package, reporter registration, or browser dependency is needed. Run the same Jest or Vitest command you already use. When the run begins, the terminal prints **Live report** with a token-protected `127.0.0.1` URL. After global teardown finishes, it prints **Last run report** with a clickable `file://` URL for the self-contained report under `test-results/integration-testing/<run-id>/index.html`. The live server closes with the runner; the saved report remains available without a server.
 
 [![Local integration-test dashboard showing real Vitest, RabbitMQ, and PostgreSQL results](https://raw.githubusercontent.com/RolandSall/testcontainers-integration/main/docs/dashboard.png)](https://github.com/RolandSall/testcontainers-integration/blob/main/docs/dashboard.png)
 
@@ -181,6 +181,24 @@ export default defineContainerProject({
 5. In CI, upload the configured output directory as an artifact. The collector still uses loopback communication, but it never attempts to open a browser when `CI` is set.
 
 Because the saved report is self-contained and uses no external CDN, it can be opened later without running the test suite or dashboard server.
+
+### WebStorm and partial test runs
+
+The dashboard opens in a normal browser, not inside the WebStorm test-results panel. With `dashboard: { open: true }`, the library asks the operating system to open the live page automatically. With `open: false`, click the **Live report** URL printed in WebStorm's Run tool window. When the run finishes, click **Last run report** to reopen the permanent HTML report.
+
+You do not need to run the complete suite. The dashboard records exactly the files and test cases selected by Jest or Vitest, provided the run uses the integration-test configuration containing `defineContainerProject` or `defineAnnotationProject`:
+
+```sh
+# Vitest: one file or one matching test name
+vitest run --config vitest.integration.config.ts test/orders.integration.test.ts
+vitest run --config vitest.integration.config.ts -t "creates an order"
+
+# Jest: one file or one matching test name
+jest --config jest.integration.config.ts test/orders.integration.test.ts
+jest --config jest.integration.config.ts -t "creates an order"
+```
+
+The same applies to WebStorm's file, suite, and individual-test actions when their run configuration uses that Jest or Vitest config file. If WebStorm launches a generic runner configuration that bypasses the integration config, neither the container lifecycle nor the dashboard is registered. Shared containers required by the selected project are started during global setup; file-dedicated containers are started only for test files that actually execute.
 
 The dashboard shows run and test status, file and test-case timings, application-bootstrap and container-startup durations, shared or file-dedicated container ownership, mapped ports, execution timelines, slow tests, lifecycle logs, and peak observed file parallelism. Its summary cards are interactive: test-status cards filter the Tests table, while Containers and Peak files open their corresponding views. The Tests tab keeps test-name, file-name, and available-status filters in their respective column headers. It also provides sortable columns and client-side pagination with 5, 10, or 15 rows per page. A prominent card shows the average across completed tests that reported timing data; each timed row uses a red upward or green downward delta to show its difference from that average. A container lists the files whose declaration selected it. Each file is collapsed by default and paginates its reported tests without claiming that every test accessed the container.
 
