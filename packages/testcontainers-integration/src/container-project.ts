@@ -13,6 +13,12 @@ import type { RabbitMqTestContainerOptions } from './rabbit-mq/rabbit-mq-contain
 import { RabbitMqTestContainer } from './rabbit-mq/rabbit-mq-container.js';
 import type { SqlServerTestContainerOptions } from './sql-server/sql-server-container.js';
 import { SqlServerTestContainer } from './sql-server/sql-server-container.js';
+import {
+  parseIntegrationDashboard,
+  serializeIntegrationDashboard,
+  type IntegrationDashboardConfiguration,
+  type SerializedIntegrationDashboardOptions,
+} from './dashboard/dashboard-config.js';
 
 /** Serializable built-in container declaration accepted by runner project configuration. */
 export type BuiltInContainerDefinition =
@@ -81,6 +87,7 @@ export interface SerializedContainerProject {
   }>[];
   readonly environment?: Readonly<Record<string, ContainerEnvironmentReference>>;
   readonly containerLogs?: boolean;
+  readonly dashboard?: SerializedIntegrationDashboardOptions;
 }
 
 /** Declares a PostgreSQL container for explicit project configuration. */
@@ -137,6 +144,7 @@ export const serializeContainerProject = <
   containers: TContainers,
   environment?: ContainerProjectEnvironment<TContainers>,
   containerLogs?: boolean,
+  dashboard?: IntegrationDashboardConfiguration,
 ): SerializedContainerProject => {
   const definitions = Object.entries(containers).map(([name, definition]) => ({
     name,
@@ -149,6 +157,7 @@ export const serializeContainerProject = <
     containers: definitions,
     environment,
     containerLogs,
+    dashboard: serializeIntegrationDashboard(dashboard),
   });
 };
 
@@ -189,11 +198,13 @@ export const parseContainerProject = (value: unknown): SerializedContainerProjec
   if (value.containerLogs !== undefined && typeof value.containerLogs !== 'boolean') {
     throw new Error('Container project containerLogs option is invalid');
   }
+  const dashboard = parseIntegrationDashboard(value.dashboard);
   return {
     version: 2,
     containers,
     ...(environment === undefined ? {} : { environment }),
     ...(value.containerLogs === undefined ? {} : { containerLogs: value.containerLogs }),
+    ...(dashboard === undefined ? {} : { dashboard }),
   };
 };
 

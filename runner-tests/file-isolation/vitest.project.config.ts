@@ -6,6 +6,10 @@ import {
 import { defineContainerProject } from '@integration-testing/testcontainers/vitest';
 
 export default defineContainerProject({
+  dashboard: {
+    open: false,
+    outputDirectory: `test-results/dashboard-docker/${process.env.FILE_ISOLATION_SUITE ?? 'vitest-project'}`,
+  },
   include: ['runner-tests/file-isolation/vitest-project/*.project.file-isolation.test.ts'],
   containers: {
     messages: rabbitMq({ isolation: 'shared', startupTimeoutMs: 300_000 }),

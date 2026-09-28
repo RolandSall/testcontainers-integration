@@ -2,6 +2,10 @@ import { fromContainer } from '@integration-testing/testcontainers';
 import { defineAnnotationProject } from '@integration-testing/testcontainers/vitest';
 
 export default defineAnnotationProject({
+  dashboard: {
+    open: false,
+    outputDirectory: `test-results/dashboard-docker/${process.env.FILE_ISOLATION_SUITE ?? 'vitest-annotation'}`,
+  },
   include: ['runner-tests/file-isolation/vitest-annotation/*.vitest-annotation.file-isolation.test.ts'],
   testFileSuffix: '.vitest-annotation.file-isolation.test.ts',
   application: {

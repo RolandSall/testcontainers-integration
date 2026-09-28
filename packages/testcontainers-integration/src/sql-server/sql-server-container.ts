@@ -35,6 +35,16 @@ export class SqlServerTestContainer implements TestContainer<SqlServerResource> 
   /** Creates an unstarted SQL Server adapter. */
   constructor(private readonly options: SqlServerTestContainerOptions = {}) {}
 
+  runtimeMetadata() {
+    const started = this.started;
+    if (started === undefined) return undefined;
+    return {
+      id: started.getId(),
+      image: this.options.image ?? DEFAULT_IMAGE,
+      mappedPorts: { '1433': started.getPort() },
+    };
+  }
+
   /**
    * Starts SQL Server once, attaches it to the supplied network, and returns the host
    * connection information discovered from Testcontainers.

@@ -38,6 +38,14 @@ class FakePostgresContainer implements ManagedContainer<PostgresResource> {
     this.events.push('container stopped');
     return Promise.resolve();
   }
+
+  runtimeMetadata() {
+    return {
+      id: 'container-id',
+      image: 'postgres:17-alpine',
+      mappedPorts: { '5432': 54_321 },
+    };
+  }
 }
 
 class FakeContainerNetwork implements ContainerNetwork {
@@ -66,6 +74,75 @@ class RecordingLogger implements IntegrationTestLogger {
 }
 
 describe('ContainerRuntime', () => {
+  test('emits ordered non-secret lifecycle metadata for a dedicated file runtime', async () => {
+    const lifecycleEvents: Record<string, unknown>[] = [];
+    const container = new FakePostgresContainer([]);
+    const runtime = new ContainerRuntime(
+      new ContainerRegistry().registerInstance('database', 'postgres', () => container),
+      {
+        networkFactory: () => Promise.resolve(new FakeContainerNetwork([])),
+        eventSink: { emit: (event) => lifecycleEvents.push({ ...event }) },
+        eventContext: { isolation: 'dedicated', filePath: '/test/orders.test.ts' },
+      },
+    );
+
+    await runtime.startInstances([{ name: 'database', kind: 'postgres' }]);
+    await runtime.stop();
+
+    expect(lifecycleEvents.map(({ type }) => type)).toEqual([
+      'network.starting',
+      'network.ready',
+      'container.starting',
+      'container.ready',
+      'container.stopping',
+      'container.stopped',
+      'network.stopping',
+      'network.stopped',
+    ]);
+    expect(lifecycleEvents.find(({ type }) => type === 'container.ready')).toMatchObject({
+      containerName: 'database',
+      containerKind: 'postgres',
+      isolation: 'dedicated',
+      filePath: '/test/orders.test.ts',
+      containerId: 'container-id',
+      image: 'postgres:17-alpine',
+      mappedPorts: { '5432': 54_321 },
+    });
+    expect(JSON.stringify(lifecycleEvents)).not.toMatch(/password|connectionUri/iu);
+  });
+
+  test('correlates opt-in container output with its named container', async () => {
+    const lifecycleEvents: Record<string, unknown>[] = [];
+    const container: ManagedContainer<PostgresResource> = {
+      kind: 'postgres',
+      start: (options) => {
+        options?.logger?.info('container:postgres', 'database system is ready');
+        return Promise.resolve({ kind: 'postgres', port: 54_321 });
+      },
+      stop: () => Promise.resolve(),
+    };
+    const runtime = new ContainerRuntime(
+      new ContainerRegistry().registerInstance('primaryDatabase', 'postgres', () => container),
+      {
+        networkFactory: () => Promise.resolve(new FakeContainerNetwork([])),
+        containerLogs: true,
+        eventSink: { emit: (event) => lifecycleEvents.push({ ...event }) },
+        eventContext: { isolation: 'dedicated', filePath: '/test/orders.test.ts' },
+      },
+    );
+
+    await runtime.startInstances([{ name: 'primaryDatabase', kind: 'postgres' }]);
+    await runtime.stop();
+
+    expect(lifecycleEvents.find(({ type }) => type === 'container.log')).toMatchObject({
+      containerName: 'primaryDatabase',
+      containerKind: 'postgres',
+      isolation: 'dedicated',
+      filePath: '/test/orders.test.ts',
+      message: 'database system is ready',
+    });
+  });
+
   test(
     'given two named instances of one kind, when the runtime starts, then both resources have independent lifecycles',
     async () => {

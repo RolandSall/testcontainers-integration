@@ -14,6 +14,12 @@ flowchart TD
   Resources --> Environment[Named environment bindings]
   Environment --> Application[Consumer ApplicationLifecycle]
   Test --> Application
+  Runner --> Reporter[Internal optional reporter]
+  Shared --> Events[Safe lifecycle events]
+  Dedicated --> Events
+  Application --> Events
+  Reporter --> Events
+  Events --> Dashboard[Loopback SSE dashboard and HTML report]
 ```
 
 The core package does not import Vitest or Jest. Runner imports exist only under the `vitest` and
@@ -76,3 +82,18 @@ setup statically discovers exactly one literal named `@RequiredContainer({...})`
 each matched annotation test file. Dynamic keys, spreads, computed expressions, missing isolation,
 duplicate names, and conflicting shared name/kind declarations fail before containers start.
 Runtime metadata verifies that `@ApplicationIntegrationTest` decorates the same marker class.
+
+## Dashboard boundary
+
+The dashboard is an optional adapter feature, not a dependency of the core runtime API. Generated
+Jest and Vitest configurations start one loopback-only session before shared containers, append an
+internal reporter without replacing consumer reporters, and finalize the report after global
+cleanup. Isolated workers send small structured event batches over authenticated loopback HTTP;
+the browser receives updates through tokenized Server-Sent Events.
+
+The event contract admits lifecycle identity and timing only: file/test names, statuses,
+durations, container kind/name/isolation, image, container ID, and mapped ports. Connection URIs,
+credentials, environment values, and native Docker handles are not fields in the contract. The
+write-token registry is a `0600` temporary file whose path, rather than token contents, crosses the
+worker environment. Dashboard transport and rendering failures are warnings and do not enter the
+container/application cleanup control flow.

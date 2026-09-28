@@ -41,6 +41,7 @@ import { fromContainer, postgreSql, rabbitMq } from '@integration-testing/testco
 import { defineContainerProject } from '@integration-testing/testcontainers/vitest';
 
 export default defineContainerProject({
+  dashboard: true,
   include: ['test/**/*.integration.test.ts'],
   containers: {
     messages: rabbitMq({ isolation: 'shared' }),
@@ -84,6 +85,20 @@ file hook owns dedicated startup, merged resource access, application shutdown, 
 
 Runner transforms remain the consumer's responsibility and can be passed through the `jest`
 property. `jest.maxWorkers` and command-line worker settings are preserved.
+
+## Optional dashboard
+
+Both generated project modes accept `dashboard: true` or an options object. The helper adds the
+internal reporter after existing reporters, starts one loopback collector during global setup, and
+saves the final self-contained report after global teardown. The reporters observe test-file and
+test-case hooks; lifecycle code separately emits network, container, preparation, application, and
+cleanup events.
+
+Workers discover the owning session through a permission-restricted temporary registry. Events
+are correlated by the absolute test-file path, while the UI displays file basenames. Vitest watch
+reruns reuse the session and generate numbered run snapshots. Browser opening is opt-in and is
+suppressed in CI; report creation remains enabled so CI can upload the output directory as an
+artifact.
 
 ## Resource timing
 

@@ -29,5 +29,6 @@ export const createConfiguredJestLifecycle = (
     ...(containerProject.containerLogs === undefined
       ? {}
       : { containerLogs: containerProject.containerLogs }),
+    ...(containerProject.dashboard === undefined ? {} : { dashboard: containerProject.dashboard }),
   });
 };

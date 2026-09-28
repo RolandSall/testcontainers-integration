@@ -1,4 +1,10 @@
 import type { ContainerEnvironmentReference } from './container-project.js';
+import {
+  parseIntegrationDashboard,
+  serializeIntegrationDashboard,
+  type IntegrationDashboardConfiguration,
+  type SerializedIntegrationDashboardOptions,
+} from './dashboard/dashboard-config.js';
 
 /** Application setup module and declarative bindings used by annotation projects. */
 export interface AnnotationProjectApplication {
@@ -12,6 +18,7 @@ export interface SerializedAnnotationProject {
   readonly testFileSuffix?: string;
   readonly containerLogs?: boolean;
   readonly environment?: Readonly<Record<string, ContainerEnvironmentReference>>;
+  readonly dashboard?: SerializedIntegrationDashboardOptions;
 }
 
 /** Creates validated configuration for a built-in annotation project. */
@@ -19,11 +26,13 @@ export const serializeAnnotationProject = (
   testFileSuffix?: string,
   containerLogs?: boolean,
   environment?: Readonly<Record<string, ContainerEnvironmentReference>>,
+  dashboard?: IntegrationDashboardConfiguration,
 ): SerializedAnnotationProject => parseAnnotationProject({
   version: 2,
   testFileSuffix,
   containerLogs,
   environment,
+  dashboard: serializeIntegrationDashboard(dashboard),
 });
 
 /** Validates annotation configuration received from a test runner. */
@@ -41,11 +50,13 @@ export const parseAnnotationProject = (value: unknown): SerializedAnnotationProj
     throw new Error('Annotation project containerLogs option is invalid');
   }
   const environment = parseEnvironment(value.environment);
+  const dashboard = parseIntegrationDashboard(value.dashboard);
   return {
     version: 2,
     ...(value.testFileSuffix === undefined ? {} : { testFileSuffix: value.testFileSuffix }),
     ...(value.containerLogs === undefined ? {} : { containerLogs: value.containerLogs }),
     ...(environment === undefined ? {} : { environment }),
+    ...(dashboard === undefined ? {} : { dashboard }),
   };
 };
 

@@ -2,6 +2,10 @@ import { fromContainer } from '@integration-testing/testcontainers';
 import { defineAnnotationProject } from '@integration-testing/testcontainers/jest';
 
 export default defineAnnotationProject({
+  dashboard: {
+    open: false,
+    outputDirectory: `test-results/dashboard-docker/${process.env.FILE_ISOLATION_SUITE ?? 'jest-annotation'}`,
+  },
   include: ['**/runner-tests/file-isolation/jest-annotation/*.jest-annotation.file-isolation.test.ts'],
   testFileSuffix: '.jest-annotation.file-isolation.test.ts',
   application: {

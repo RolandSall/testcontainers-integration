@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import type { Container as ManagedContainer } from '../container-kind.js';
 import { Container } from '../container-kind.js';
 import { ContainerRegistry } from '../container-registry.js';
@@ -9,6 +9,8 @@ import type { ContainerNetwork } from '../network/container-network.js';
 import type { SqlServerResource } from '../sql-server/sql-server-resource.js';
 import { CONTAINER_RESOURCES_CONTEXT_KEY } from './context-key.js';
 import { createVitestContainerGlobalSetup } from './global-setup.js';
+import { DashboardSession } from '../dashboard/dashboard-session.js';
+import { DASHBOARD_SESSIONS_ENV } from '../dashboard/dashboard-context.js';
 
 class FakeSqlServerContainer implements ManagedContainer<SqlServerResource> {
   readonly kind = Container.SqlServer;
@@ -100,6 +102,55 @@ test(
     }
   },
 );
+
+test('a dashboard startup failure warns and does not change container setup results', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dashboard-fail-open-'));
+  const start = vi.spyOn(DashboardSession.prototype, 'start')
+    .mockRejectedValueOnce(new Error('dashboard port unavailable'));
+  const warning = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  const lifecycle = createVitestContainerGlobalSetup({
+    root,
+    registry: new ContainerRegistry(),
+    requiredContainerInstances: [],
+    dashboard: { open: false, outputDirectory: 'reports' },
+  });
+  let provided = false;
+  try {
+    await lifecycle.setup({ provide: () => { provided = true; } });
+    await lifecycle.teardown();
+
+    expect(provided).toBe(true);
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('disabled after startup failure'));
+  } finally {
+    start.mockRestore();
+    warning.mockRestore();
+    await lifecycle.teardown();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a discovery failure finalizes the Vitest dashboard session', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'vitest-dashboard-discovery-failure-'));
+  const lifecycle = createVitestContainerGlobalSetup({
+    root,
+    registry: new ContainerRegistry(),
+    dashboard: { open: false, outputDirectory: 'reports' },
+  });
+  try {
+    await writeFile(
+      join(root, 'invalid.container.integration.test.ts'),
+      'class MissingRequiredContainerDeclaration {}',
+    );
+
+    await expect(lifecycle.setup({ provide: () => undefined }))
+      .rejects.toThrow('expected one named @RequiredContainer');
+    expect(process.env[DASHBOARD_SESSIONS_ENV]).toBeUndefined();
+  } finally {
+    await lifecycle.teardown();
+    delete process.env[DASHBOARD_SESSIONS_ENV];
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test(
   'given resource preparation fails, when Vitest global setup runs, then containers are stopped and nothing is provided',

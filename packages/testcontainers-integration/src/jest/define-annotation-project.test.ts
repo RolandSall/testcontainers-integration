@@ -27,6 +27,8 @@ test('given annotation options, when a Jest project is defined, then scanner lif
     containerLogs: true,
   });
   expect(config.testTimeout).toBe(30_000);
+  expect(config.reporters).toBeUndefined();
+  expect(config.globals?.[ANNOTATION_PROJECT_CONTEXT_KEY]).not.toHaveProperty('dashboard');
 });
 
 test('annotation projects preserve the configured Jest worker count', () => {

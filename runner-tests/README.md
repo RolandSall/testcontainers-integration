@@ -8,6 +8,7 @@ These suites verify the library from the perspective of Jest and Vitest consumer
 | --- | --- | --- | --- |
 | [`jest`](./jest) | Private workspace package | Jest 30 can load the built CommonJS-compatible adapter, scan an annotated file, provide shared resources to application setup, and leave an unannotated file untouched. It uses fake containers and a fake network, so Docker is not required. | `bun run test:runners` |
 | [`vitest`](./vitest) | Private workspace package | Vitest 4 can load the built ESM adapter and provides the same annotated and unannotated lifecycle behavior. It also uses fake containers and does not require Docker. | `bun run test:runners` |
+| [`dashboard`](./dashboard) | Cross-runner dashboard fixtures | Generated Jest and Vitest projects preserve parallel execution and report passing, failing, skipped, and slow tests. A headless-browser test verifies live SSE updates, timelines, duration bars, filtering, failure rendering, empty runs, and the saved report. | `bun run test:dashboard` |
 | [`file-isolation`](./file-isolation) | Cross-runner Docker fixtures | Real Jest and Vitest processes receive shared and file-dedicated PostgreSQL and RabbitMQ resources, including parallel execution and failure cleanup. | `bun run test:file-isolation:docker` |
 
 The Jest and Vitest directories have `private: true` package manifests so they behave like small consumer projects with runner-specific dependency and module settings. They are not release packages and cannot be published accidentally. The file-isolation directory is not a package because one root verifier coordinates several runner processes and inspects their Docker resources.
@@ -20,6 +21,12 @@ The Jest and Vitest directories have `private: true` package manifests so they b
 - `unannotated.runner.test.ts` verifies that an ordinary test file does not start an application or request infrastructure.
 
 These tests answer whether each runner adapter loads and wires lifecycle hooks correctly. They do not prove that Docker images start or that parallel files receive isolated infrastructure.
+
+## Dashboard fixtures
+
+[`dashboard`](./dashboard) starts real Jest and Vitest child processes through the generated project helpers. The passing fixtures run two files concurrently and include passed, skipped, and deliberately slow tests. The failing fixtures prove that a non-zero test run still produces a report containing the failed case. The verifier checks the final self-contained HTML and the browser test connects to the live loopback server before reopening the saved report.
+
+The same dashboard option is enabled in the Docker-backed file-isolation matrix. Those reports are checked for actual shared RabbitMQ and dedicated PostgreSQL mapped ports, file-to-container declarations, and container/network cleanup events.
 
 ## Real file-isolation fixtures
 

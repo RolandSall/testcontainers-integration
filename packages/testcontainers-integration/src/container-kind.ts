@@ -24,4 +24,14 @@ export interface Container<TResource extends ContainerResource> {
 
   /** Stops the container and releases its external resources. */
   stop(): Promise<void>;
+
+  /** Optional non-secret runtime facts used by local diagnostics. */
+  runtimeMetadata?(): ContainerRuntimeMetadata | undefined;
+}
+
+/** Safe runtime facts that never contain credentials or connection strings. */
+export interface ContainerRuntimeMetadata {
+  readonly id?: string;
+  readonly image?: string;
+  readonly mappedPorts?: Readonly<Record<string, number>>;
 }

@@ -49,6 +49,8 @@ test('given concise Vitest options, when a project is defined, then library life
     },
     containerLogs: true,
   });
+  expect(config.test?.reporters).toBeUndefined();
+  expect(config.test?.provide?.[CONTAINER_PROJECT_CONTEXT_KEY]).not.toHaveProperty('dashboard');
 });
 
 test('given an environment reference, when its name or property does not match the declared container, then TypeScript rejects it', () => {
@@ -81,6 +83,40 @@ test('runner worker settings are preserved and are not derived from container is
     version: 2,
     containers: [{ name: 'database', isolation: 'dedicated' }],
   });
+});
+
+test('dashboard activation appends its reporter without replacing configured reporters', () => {
+  const config = defineContainerProject({
+    dashboard: true,
+    include: ['test/**/*.integration.test.ts'],
+    containers: { database: postgreSql({ isolation: 'shared' }) },
+    vitest: { reporters: ['verbose'] },
+  });
+
+  expect(config.test?.reporters).toEqual([
+    'verbose',
+    '@integration-testing/testcontainers/vitest/dashboard-reporter',
+  ]);
+  expect(config.test?.provide?.[CONTAINER_PROJECT_CONTEXT_KEY]).toMatchObject({
+    dashboard: {
+      open: false,
+      outputDirectory: 'test-results/integration-testing',
+    },
+  });
+});
+
+test('dashboard activation preserves a Vitest reporter-with-options tuple', () => {
+  const config = defineContainerProject({
+    dashboard: true,
+    include: ['test/**/*.integration.test.ts'],
+    containers: {},
+    vitest: { reporters: ['json', { outputFile: 'results.json' }] as never },
+  });
+
+  expect(config.test?.reporters).toEqual([
+    ['json', { outputFile: 'results.json' }],
+    '@integration-testing/testcontainers/vitest/dashboard-reporter',
+  ]);
 });
 
 test('Vitest isolate false is rejected because file state would be unsafe', () => {

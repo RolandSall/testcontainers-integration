@@ -6,6 +6,10 @@ import {
 import { defineContainerProject } from '@integration-testing/testcontainers/jest';
 
 export default defineContainerProject({
+  dashboard: {
+    open: false,
+    outputDirectory: `test-results/dashboard-docker/${process.env.FILE_ISOLATION_SUITE ?? 'jest-project'}`,
+  },
   include: ['**/runner-tests/file-isolation/jest-project/*.project.file-isolation.test.ts'],
   containers: {
     messages: rabbitMq({ isolation: 'shared', startupTimeoutMs: 300_000 }),

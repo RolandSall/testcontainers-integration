@@ -8,6 +8,7 @@ import { ContainerRegistry } from '../container-registry.js';
 import type { ContainerStartOptions } from '../container-start-options.js';
 import type { ContainerNetwork } from '../network/container-network.js';
 import type { SqlServerResource } from '../sql-server/sql-server-resource.js';
+import { DASHBOARD_SESSIONS_ENV } from '../dashboard/dashboard-context.js';
 import { JEST_CONTAINER_RESOURCES_PATH_ENV } from './context-key.js';
 import { createJestContainerGlobalSetup } from './global-setup.js';
 
@@ -118,3 +119,25 @@ test(
     }
   },
 );
+
+test('a discovery failure finalizes the Jest dashboard session', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'jest-dashboard-discovery-failure-'));
+  const lifecycle = createJestContainerGlobalSetup({
+    root,
+    registry: new ContainerRegistry(),
+    dashboard: { open: false, outputDirectory: 'reports' },
+  });
+  try {
+    await writeFile(
+      join(root, 'invalid.container.integration.test.ts'),
+      'class MissingRequiredContainerDeclaration {}',
+    );
+
+    await expect(lifecycle.setup()).rejects.toThrow('expected one named @RequiredContainer');
+    expect(process.env[DASHBOARD_SESSIONS_ENV]).toBeUndefined();
+  } finally {
+    await lifecycle.teardown();
+    delete process.env[DASHBOARD_SESSIONS_ENV];
+    await rm(root, { recursive: true, force: true });
+  }
+});

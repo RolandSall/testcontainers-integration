@@ -20,6 +20,10 @@ export type { SerializableContainerResources } from './container-resources.js';
 export { ContainerRuntime } from './container-runtime.js';
 export type { ContainerRuntimeInstance } from './container-runtime.js';
 export type { ContainerRuntimeOptions } from './container-runtime-options.js';
+export type {
+  IntegrationDashboardConfiguration,
+  IntegrationDashboardOptions,
+} from './dashboard/dashboard-config.js';
 export { ConsoleIntegrationTestLogger, consoleIntegrationTestLogger } from './logging/console-integration-test-logger.js';
 export { createContainerLogConsumer } from './logging/container-log-consumer.js';
 export type { IntegrationTestLogger } from './logging/integration-test-logger.js';

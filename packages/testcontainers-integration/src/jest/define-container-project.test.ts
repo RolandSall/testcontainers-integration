@@ -45,6 +45,8 @@ test('given concise Jest options, when a project is defined, then library setup 
       },
     },
   });
+  expect(config.reporters).toBeUndefined();
+  expect(config.globals?.[CONTAINER_PROJECT_CONTEXT_KEY]).not.toHaveProperty('dashboard');
 });
 
 test('runner worker settings are preserved and are not derived from container isolation', () => {
@@ -58,5 +60,25 @@ test('runner worker settings are preserved and are not derived from container is
   expect(config.globals?.[CONTAINER_PROJECT_CONTEXT_KEY]).toMatchObject({
     version: 2,
     containers: [{ name: 'database', isolation: 'dedicated' }],
+  });
+});
+
+test('dashboard activation appends its reporter without replacing configured reporters', () => {
+  const config = defineContainerProject({
+    dashboard: { open: false, outputDirectory: 'artifacts/dashboard' },
+    include: ['**/test/**/*.integration.test.ts'],
+    containers: { database: postgreSql({ isolation: 'shared' }) },
+    jest: { reporters: ['summary'] },
+  });
+
+  expect(config.reporters).toEqual([
+    'summary',
+    '@integration-testing/testcontainers/jest/dashboard-reporter',
+  ]);
+  expect(config.globals?.[CONTAINER_PROJECT_CONTEXT_KEY]).toMatchObject({
+    dashboard: {
+      open: false,
+      outputDirectory: 'artifacts/dashboard',
+    },
   });
 });

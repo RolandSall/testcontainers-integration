@@ -11,6 +11,7 @@ const packages = [
 ] as const;
 
 const root = resolve(import.meta.dirname, '..');
+const MAX_ARCHIVE_BYTES = 275_000;
 
 const main = async (): Promise<void> => {
   const destination = await mkdtemp(join(tmpdir(), 'testcontainers-integration-pack-'));
@@ -47,12 +48,26 @@ const main = async (): Promise<void> => {
       archiveByPackage.set(packageEntry.name, join(destination, archive));
       const archivePath = join(destination, archive);
       const archiveSize = (await stat(archivePath)).size;
-      if (archiveSize > 250_000) {
-        throw new Error(`Archive ${archive} exceeds the 250 KB package budget`);
+      if (archiveSize > MAX_ARCHIVE_BYTES) {
+        throw new Error(
+          `Archive ${archive} is ${archiveSize} bytes and exceeds the ${MAX_ARCHIVE_BYTES}-byte package budget`,
+        );
       }
       const result = spawnSync('tar', ['-tzf', archivePath], {
         encoding: 'utf8',
       });
+      const entries = result.stdout.trim().split('\n');
+      const unexpectedEntries = entries.filter((entry) =>
+        entry !== 'package/package.json' &&
+        entry !== 'package/README.md' &&
+        entry !== 'package/LICENSE' &&
+        !entry.startsWith('package/dist/'),
+      );
+      if (result.status !== 0 || unexpectedEntries.length > 0) {
+        throw new Error(
+          `Archive ${archive} contains entries outside the publication allowlist: ${unexpectedEntries.join(', ')}`,
+        );
+      }
       const requiredEntries = [
         'package/dist/',
         'package/dist/types/esm/index.d.ts',
@@ -63,7 +78,7 @@ const main = async (): Promise<void> => {
       const missing = requiredEntries.filter(
         (entry) => !result.stdout.includes(entry),
       );
-      if (result.status !== 0 || missing.length > 0) {
+      if (missing.length > 0) {
         throw new Error(
           `Archive ${archive} is missing required entries: ${missing.join(', ')}`,
         );
@@ -71,6 +86,7 @@ const main = async (): Promise<void> => {
       const forbiddenEntries = [
         'package/src/',
         'package/examples/',
+        'package/dashboard-template.html',
         '.test.',
         'vitest.config',
         'tsconfig.',
@@ -79,7 +95,7 @@ const main = async (): Promise<void> => {
       if (leaked.length > 0) {
         throw new Error(`Archive ${archive} contains development files: ${leaked.join(', ')}`);
       }
-      const entryCount = result.stdout.trim().split('\n').length;
+      const entryCount = entries.length;
       if (entryCount > 350) {
         throw new Error(`Archive ${archive} exceeds the 350-entry package budget`);
       }
@@ -87,12 +103,15 @@ const main = async (): Promise<void> => {
         'package/dist/vitest/annotation-global-setup.js',
         'package/dist/vitest/project-global-setup.js',
         'package/dist/vitest/file-setup.js',
+        'package/dist/vitest/dashboard-reporter.js',
         'package/dist/jest/annotation-global-setup.js',
         'package/dist/jest/annotation-global-teardown.js',
         'package/dist/jest/project-global-setup.js',
         'package/dist/jest/project-global-teardown.js',
         'package/dist/jest/file-setup.js',
         'package/dist/jest/file-setup.cjs',
+        'package/dist/jest/dashboard-reporter.js',
+        'package/dist/jest/dashboard-reporter.cjs',
       ];
       const missingRunnerEntries = runnerEntries.filter(
         (entry) => !result.stdout.includes(entry),
@@ -102,7 +121,10 @@ const main = async (): Promise<void> => {
           `Archive ${archive} is missing runner setup entries: ${missingRunnerEntries.join(', ')}`,
         );
       }
-      process.stdout.write(`verified ${archive}\n`);
+      verifyCompatibilityManifest(archivePath, archive);
+      process.stdout.write(
+        `verified ${archive} (${archiveSize} bytes, ${entryCount} allowlisted entries)\n`,
+      );
     }
 
     await verifyInstalledConsumers(archiveByPackage, destination);
@@ -110,6 +132,76 @@ const main = async (): Promise<void> => {
     await rm(destination, { recursive: true, force: true });
   }
 };
+
+const verifyCompatibilityManifest = (archivePath: string, archive: string): void => {
+  const result = spawnSync('tar', ['-xOzf', archivePath, 'package/package.json'], {
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) {
+    throw new Error(`Could not read package.json from ${archive}`);
+  }
+  const parsed: unknown = JSON.parse(result.stdout);
+  if (!isRecord(parsed)) {
+    throw new Error(`Archive ${archive} has an invalid package manifest`);
+  }
+  const exportsMap = parsed.exports;
+  if (!isRecord(exportsMap)) {
+    throw new Error(`Archive ${archive} has an invalid exports map`);
+  }
+  const stableExportPaths = [
+    '.',
+    './container-resource-map',
+    './vitest',
+    './vitest/project-global-setup',
+    './vitest/annotation-global-setup',
+    './vitest/file-setup',
+    './jest',
+    './jest/project-global-setup',
+    './jest/project-global-teardown',
+    './jest/annotation-global-setup',
+    './jest/annotation-global-teardown',
+    './jest/file-setup',
+  ];
+  const missingExports = stableExportPaths.filter((path) => !(path in exportsMap));
+  if (missingExports.length > 0) {
+    throw new Error(
+      `Archive ${archive} removed 0.1.0 export paths: ${missingExports.join(', ')}`,
+    );
+  }
+  if (
+    !isStringRecord(parsed.peerDependencies) ||
+    parsed.peerDependencies.jest !== '>=30 <31' ||
+    parsed.peerDependencies.vitest !== '>=4 <5'
+  ) {
+    throw new Error(`Archive ${archive} changed its supported runner ranges`);
+  }
+  if (!isStringRecord(parsed.engines) || parsed.engines.node !== '>=22.22') {
+    throw new Error(`Archive ${archive} changed its supported Node.js range`);
+  }
+  if (!isStringRecord(parsed.dependencies)) {
+    throw new Error(`Archive ${archive} has invalid runtime dependencies`);
+  }
+  const expectedDependencies = [
+    '@testcontainers/mssqlserver',
+    '@testcontainers/mongodb',
+    '@testcontainers/postgresql',
+    '@testcontainers/rabbitmq',
+    'testcontainers',
+    'typescript',
+  ];
+  const actualDependencies = Object.keys(parsed.dependencies).sort();
+  if (JSON.stringify(actualDependencies) !== JSON.stringify(expectedDependencies.sort())) {
+    throw new Error(
+      `Archive ${archive} has unexpected runtime dependencies: ${actualDependencies.join(', ')}`,
+    );
+  }
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isStringRecord = (value: unknown): value is Record<string, string> =>
+  isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string');
 
 const verifyInstalledConsumers = async (
   archiveByPackage: ReadonlyMap<string, string>,
@@ -203,9 +295,14 @@ const run = (
 
 const esmSmoke = `
 import assert from 'node:assert/strict';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import * as containers from '@integration-testing/testcontainers';
 import * as vitestAdapter from '@integration-testing/testcontainers/vitest';
 import * as jestAdapter from '@integration-testing/testcontainers/jest';
+import VitestDashboardReporter from '@integration-testing/testcontainers/vitest/dashboard-reporter';
+import JestDashboardReporter from '@integration-testing/testcontainers/jest/dashboard-reporter';
 
 assert.equal(typeof containers.ContainerRuntime, 'function');
 assert.equal(typeof vitestAdapter.createVitestContainerGlobalSetup, 'function');
@@ -217,6 +314,69 @@ assert.equal(typeof vitestAdapter.defineContainerProject, 'function');
 assert.equal(typeof jestAdapter.defineContainerProject, 'function');
 assert.equal(typeof vitestAdapter.defineAnnotationProject, 'function');
 assert.equal(typeof jestAdapter.defineAnnotationProject, 'function');
+assert.equal(typeof VitestDashboardReporter, 'function');
+assert.equal(typeof JestDashboardReporter, 'function');
+for (const name of [
+  'Container',
+  'defineContainerCatalog',
+  'fromContainer',
+  'mongoDb',
+  'postgreSql',
+  'rabbitMq',
+  'sqlServer',
+  'ContainerRegistry',
+  'ContainerResources',
+  'ContainerRuntime',
+  'ConsoleIntegrationTestLogger',
+  'consoleIntegrationTestLogger',
+  'createContainerLogConsumer',
+  'createDefaultContainerRegistry',
+  'GenericTestContainer',
+  'RequiredContainer',
+  'requiredContainersFor',
+  'ApplicationIntegrationTest',
+  'isApplicationIntegrationTest',
+  'IntegrationEnvironment',
+  'OwnedContainerSource',
+  'ProvidedContainerSource',
+  'startTestcontainersNetwork',
+  'SqlServerTestContainer',
+  'PostgreSqlTestContainer',
+  'MongoDbTestContainer',
+  'RabbitMqTestContainer',
+]) {
+  assert.ok(name in containers, 'missing 0.1.0 root export: ' + name);
+}
+for (const name of [
+  'CONTAINER_RESOURCES_CONTEXT_KEY',
+  'createVitestContainerGlobalSetup',
+  'injectedContainerProject',
+  'injectedContainerResources',
+  'discoverRequiredContainers',
+  'installVitestApplicationIntegrationTestSupport',
+  'configureVitestContainerFileSupport',
+  'defineAnnotationProject',
+  'defineVitestAnnotationProject',
+  'defineContainerProject',
+  'defineVitestContainerProject',
+]) {
+  assert.ok(name in vitestAdapter, 'missing 0.1.0 Vitest export: ' + name);
+}
+for (const name of [
+  'JEST_CONTAINER_RESOURCES_PATH_ENV',
+  'createJestContainerGlobalSetup',
+  'injectedContainerProject',
+  'injectedContainerResources',
+  'installJestApplicationIntegrationTestSupport',
+  'configureJestContainerFileSupport',
+  'discoverRequiredContainers',
+  'defineAnnotationProject',
+  'defineJestAnnotationProject',
+  'defineContainerProject',
+  'defineJestContainerProject',
+]) {
+  assert.ok(name in jestAdapter, 'missing 0.1.0 Jest export: ' + name);
+}
 const vitestAnnotations = vitestAdapter.defineAnnotationProject({
   application: './test/application.setup.ts',
 });
@@ -231,6 +391,7 @@ assert.equal(
   '@integration-testing/testcontainers/jest/annotation-global-setup',
 );
 const vitestProject = vitestAdapter.defineContainerProject({
+  dashboard: true,
   include: ['test/**/*.integration.test.ts'],
   containers: {
     primaryDatabase: containers.postgreSql({ isolation: 'dedicated' }),
@@ -250,6 +411,10 @@ assert.deepEqual(vitestProject.test.globalSetup, [
 assert.deepEqual(vitestProject.test.setupFiles, [
   '@integration-testing/testcontainers/vitest/file-setup',
   './test/application.setup.ts',
+]);
+assert.deepEqual(vitestProject.test.reporters, [
+  'default',
+  '@integration-testing/testcontainers/vitest/dashboard-reporter',
 ]);
 const jestProject = jestAdapter.defineContainerProject({
   include: ['test/**/*.integration.test.ts'],
@@ -271,12 +436,37 @@ const isolatedJestProject = jestAdapter.defineContainerProject({
   jest: { maxWorkers: 9 },
 });
 assert.equal(isolatedJestProject.maxWorkers, 9);
+
+const dashboardRoot = await mkdtemp(join(tmpdir(), 'packed-dashboard-esm-'));
+const dashboardLifecycle = vitestAdapter.createVitestContainerGlobalSetup({
+  root: dashboardRoot,
+  registry: new containers.ContainerRegistry(),
+  requiredContainerInstances: [],
+  dashboard: { open: false, outputDirectory: 'reports' },
+});
+try {
+  await dashboardLifecycle.setup({ provide() {} });
+  await dashboardLifecycle.teardown();
+  const [runDirectory] = await readdir(join(dashboardRoot, 'reports'));
+  assert.ok(runDirectory);
+  const dashboardReport = await readFile(
+    join(dashboardRoot, 'reports', runDirectory, 'index.html'),
+    'utf8',
+  );
+  assert.match(dashboardReport, /^<!doctype html>/);
+  assert.match(dashboardReport, /Vitest integration report/);
+  assert.doesNotMatch(dashboardReport, /__INTEGRATION_DASHBOARD_(?:TITLE|STYLES|STATE|SCRIPT)__/);
+} finally {
+  await dashboardLifecycle.teardown();
+  await rm(dashboardRoot, { recursive: true, force: true });
+}
 `;
 
 const cjsSmoke = `
 const assert = require('node:assert/strict');
 const containers = require('@integration-testing/testcontainers');
 const jestAdapter = require('@integration-testing/testcontainers/jest');
+const JestDashboardReporter = require('@integration-testing/testcontainers/jest/dashboard-reporter');
 
 assert.equal(typeof containers.ContainerRuntime, 'function');
 assert.equal(typeof jestAdapter.createJestContainerGlobalSetup, 'function');
@@ -284,6 +474,7 @@ assert.equal(typeof containers.postgreSql, 'function');
 assert.equal(typeof containers.fromContainer, 'function');
 assert.equal(typeof jestAdapter.defineContainerProject, 'function');
 assert.equal(typeof jestAdapter.defineAnnotationProject, 'function');
+assert.equal(typeof JestDashboardReporter.default, 'function');
 const jestAnnotations = jestAdapter.defineAnnotationProject({
 });
 assert.equal(
@@ -291,6 +482,7 @@ assert.equal(
   '@integration-testing/testcontainers/jest/annotation-global-teardown',
 );
 const jestProject = jestAdapter.defineContainerProject({
+  dashboard: true,
   include: ['test/**/*.integration.test.ts'],
   containers: { database: containers.postgreSql({ isolation: 'dedicated' }) },
   application: {
@@ -304,6 +496,10 @@ assert.equal(
   jestProject.globalTeardown,
   '@integration-testing/testcontainers/jest/project-global-teardown',
 );
+assert.deepEqual(jestProject.reporters, [
+  'default',
+  '@integration-testing/testcontainers/jest/dashboard-reporter',
+]);
 const isolatedJestProject = jestAdapter.defineContainerProject({
   include: ['test/**/*.integration.test.ts'],
   containers: { database: containers.postgreSql({ isolation: 'dedicated' }) },
@@ -330,10 +526,12 @@ const containers = {
 };
 
 defineVitestAnnotationProject({
+  dashboard: true,
   application: './test/application.setup.ts',
 });
 
 defineJestAnnotationProject({
+  dashboard: { open: false, outputDirectory: 'test-results/integration-testing' },
   application: './test/application.setup.ts',
 });
 

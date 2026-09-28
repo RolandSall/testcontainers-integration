@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -110,6 +110,33 @@ const verifyReports = (suite: string, reports: readonly FileReport[]): void => {
   console.log(
     `${suite}: files overlapped for ${overlapEnded - overlapStarted}ms; shared RabbitMQ ${reports[0]?.rabbitPort}; dedicated PostgreSQL ${reports.map(({ primaryPort, auditPort }) => `${primaryPort}/${auditPort}`).join(', ')}`,
   );
+  verifyDashboardReport(suite, reports);
+};
+
+const verifyDashboardReport = (suite: string, reports: readonly FileReport[]): void => {
+  const directory = resolve(workspaceRoot, 'test-results', 'dashboard-docker', suite);
+  if (!existsSync(directory)) throw new Error(`${suite} dashboard output directory was not created`);
+  const reportsHtml = readdirSync(directory)
+    .map((name) => join(directory, name, 'index.html'))
+    .filter(existsSync)
+    .sort((left, right) => statSync(right).mtimeMs - statSync(left).mtimeMs);
+  const reportPath = reportsHtml[0];
+  if (reportPath === undefined) throw new Error(`${suite} dashboard report was not generated`);
+  const html = readFileSync(reportPath, 'utf8');
+  for (const event of ['container.ready', 'container.stopped', 'network.stopped', 'file.container-declared']) {
+    if (!html.includes(event)) throw new Error(`${suite} dashboard is missing ${event}`);
+  }
+  for (const report of reports) {
+    for (const port of [report.rabbitPort, report.primaryPort, report.auditPort]) {
+      if (!html.includes(String(port))) {
+        throw new Error(`${suite} dashboard is missing mapped port ${port}`);
+      }
+    }
+  }
+  if (!html.includes('"isolation":"shared"') || !html.includes('"isolation":"dedicated"')) {
+    throw new Error(`${suite} dashboard did not retain mixed container isolation`);
+  }
+  console.log(`${suite}: dashboard verified at ${reportPath}`);
 };
 
 const verifyBootstrapFailureCleanup = (directory: string): void => {
@@ -140,6 +167,25 @@ const verifyBootstrapFailureCleanup = (directory: string): void => {
     throw new Error('The bootstrap-failure fixture did not prove the expected partial startup');
   }
   waitForDockerCleanup(before, 'Bootstrap-failure fixture');
+  const dashboardDirectory = resolve(
+    workspaceRoot,
+    'test-results',
+    'dashboard-docker',
+    'vitest-bootstrap-failure',
+  );
+  const dashboardReport = readdirSync(dashboardDirectory)
+    .map((name) => join(dashboardDirectory, name, 'index.html'))
+    .filter(existsSync)
+    .sort((left, right) => statSync(right).mtimeMs - statSync(left).mtimeMs)[0];
+  if (dashboardReport === undefined) {
+    throw new Error('Bootstrap-failure dashboard report was not generated');
+  }
+  const dashboardHtml = readFileSync(dashboardReport, 'utf8');
+  for (const event of ['application.failed', 'container.stopped', 'network.stopped']) {
+    if (!dashboardHtml.includes(event)) {
+      throw new Error(`Bootstrap-failure dashboard is missing ${event}`);
+    }
+  }
   console.log('bootstrap failure: side effect completed and containers/networks were cleaned');
 };
 
@@ -184,6 +230,10 @@ const waitForDockerCleanup = (expected: string, fixture: string, timeoutMs = 30_
 };
 
 const main = (): void => {
+  rmSync(resolve(workspaceRoot, 'test-results', 'dashboard-docker'), {
+    recursive: true,
+    force: true,
+  });
   const reportDirectory = mkdtempSync(join(tmpdir(), 'integration-file-isolation-'));
   try {
     for (const run of runs) {
