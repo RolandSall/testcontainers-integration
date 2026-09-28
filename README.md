@@ -124,6 +124,95 @@ Run that failure path independently with:
 bun run test:termination-cleanup:docker
 ```
 
+## Live local dashboard
+
+The generated Jest and Vitest projects can expose test and container lifecycle activity in a local dashboard. It is disabled by default. Enable the standard settings with one line:
+
+```ts
+export default defineContainerProject({
+  dashboard: true,
+  include: ['test/**/*.integration.test.ts'],
+  containers: {
+    database: postgreSql({ isolation: 'dedicated' }),
+  },
+});
+```
+
+The same `dashboard` option works with annotation mode:
+
+```ts
+import { defineAnnotationProject } from '@integration-testing/testcontainers/vitest';
+
+export default defineAnnotationProject({
+  dashboard: true,
+  application: './test/application.setup.ts',
+});
+```
+
+No separate dashboard package, reporter registration, or browser dependency is needed. Run the same Jest or Vitest command you already use. When the run begins, the library prints a token-protected `127.0.0.1` URL. It does not open a browser unless you explicitly request it. After global teardown finishes, it saves a self-contained report under `test-results/integration-testing/<run-id>/index.html`.
+
+![Local integration-test dashboard](https://raw.githubusercontent.com/RolandSall/testcontainers-integration/main/docs/dashboard.png)
+
+Advanced settings:
+
+```ts
+export default defineContainerProject({
+  dashboard: {
+    open: false,
+    outputDirectory: 'test-results/integration-testing',
+  },
+  // The rest of the project configuration remains unchanged.
+});
+```
+
+- `open` defaults to `false`. Set it to `true` to open the live page locally. Browser opening is always suppressed when `CI` is set.
+- `outputDirectory` must be relative to the runner root and cannot escape it.
+- Existing Jest or Vitest reporters remain configured. The dashboard reporter is added alongside them and normal console output remains unchanged.
+- Watch-mode reruns appear as separate runs in the same live session and receive `run-<number>.html` snapshots. The final `index.html` includes lifecycle events through shared-container and network cleanup.
+
+### Use the dashboard during development and CI
+
+1. Open the printed local URL while the tests are running.
+2. Use **Containers** to see which files selected each shared or dedicated container, its mapped ports, startup status, and optional logs.
+3. Use **Tests** to search, filter, sort, paginate, and compare individual runner-reported test durations with the run average.
+4. Use **Lifecycle** to separate container startup, application bootstrap, test-file execution, failures, and cleanup timing.
+5. In CI, upload the configured output directory as an artifact. The collector still uses loopback communication, but it never attempts to open a browser when `CI` is set.
+
+Because the saved report is self-contained and uses no external CDN, it can be opened later without running the test suite or dashboard server.
+
+The dashboard shows run and test status, file and test-case timings, application-bootstrap and container-startup durations, shared or file-dedicated container ownership, mapped ports, execution timelines, slow tests, lifecycle logs, and peak observed file parallelism. Its summary cards are interactive: test-status cards filter the Tests table, while Containers and Peak files open their corresponding views. The Tests tab keeps test-name, file-name, and available-status filters in their respective column headers. It also provides sortable columns and client-side pagination with 5, 10, or 15 rows per page. A prominent card shows the average across completed tests that reported timing data; each timed row uses a red upward or green downward delta to show its difference from that average. A container lists the files whose declaration selected it. Each file is collapsed by default and paginates its reported tests without claiming that every test accessed the container.
+
+The timing categories are intentionally separate:
+
+- **Test duration** comes directly from the Jest or Vitest test-case result. It does not include global container startup or the application's `beforeAll` bootstrap.
+- **Application bootstrap** is measured around the configured application `start()` callback.
+- **Container startup** is measured around each Testcontainers adapter's `start()` operation, including readiness waiting.
+- **Test-file duration** comes from the runner's file/module result and may include that file's hooks. It is shown separately from individual test duration.
+
+Each container has a foldable **Show logs** section. Raw container output is included there only when the existing `containerLogs: true` option is enabled. Named containers, including custom containers that write through the supplied logger, are correlated with their own output. Reports can also contain test names, failure messages, and application-provided container log text. They remain local, use no external CDN, and should not be committed. Add the configured output directory to `.gitignore`; the repository default is:
+
+```gitignore
+test-results/
+```
+
+The collector binds only to `127.0.0.1`. Browser reads and worker event ingestion use independent random tokens, and the worker token registry is stored in a permission-restricted temporary file. Dashboard delivery and report-generation failures warn without changing test results, worker counts, container isolation, or cleanup.
+
+This is test-run visibility, not full infrastructure observability. It does not sample Docker CPU, memory, network, or disk statistics, and it does not observe SQL queries, HTTP calls, or internal application operations. Use Docker statistics and application tracing such as OpenTelemetry for those concerns. [Testcontainers Desktop](https://testcontainers.com/desktop/docs/) provides broader container-session tooling; this dashboard focuses on Jest/Vitest test cases and their explicit shared/dedicated relationships.
+
+Ordinary startup and test failures still produce partial reports. `SIGKILL` prevents JavaScript report finalization, so a completed HTML file is not guaranteed after hard process termination. Testcontainers' Ryuk cleanup remains independent from the dashboard.
+
+Dashboard support is currently limited to configurations generated by `defineContainerProject` and `defineAnnotationProject` for Jest and Vitest. Direct `ContainerRuntime`, Cucumber, Node's test runner, and custom harness behavior is unchanged.
+
+### Compatibility with 0.1.0
+
+The 0.2.0 dashboard feature is additive. Existing 0.1.0 annotation and project configurations keep their previous behavior because the dashboard remains disabled when `dashboard` is omitted. No existing public import path was removed, the serialized configuration version remains `2`, existing custom reporters and worker settings are preserved, and the supported Node.js, Jest, Vitest, and TypeScript ranges are unchanged.
+
+Upgrade normally, then add `dashboard: true` only if you want the feature:
+
+```bash
+npm install --save-dev @integration-testing/testcontainers@0.2
+```
+
 ## Why use it?
 
 - Explicit shared or file-dedicated ownership for each named container.
@@ -132,6 +221,7 @@ bun run test:termination-cleanup:docker
 - Application startup only after infrastructure is ready.
 - Deterministic reverse-order cleanup, including partial-startup failures.
 - First-class Vitest 4 and Jest 30 lifecycle adapters.
+- Opt-in live local dashboard and self-contained HTML reports for generated Jest and Vitest projects.
 - Works with NestJS applications: start the app after containers are ready and close it after the tests. NestJS remains your application's dependency, not this package's dependency.
 - Can be used without Jest or Vitest by starting and stopping `ContainerRuntime` from Cucumber hooks, Node.js test hooks, or your own test setup.
 - No dependency on NestJS or any other backend framework.
@@ -990,11 +1080,12 @@ Use this from Cucumber hooks, Node's built-in test runner, or a custom test harn
 
 ```bash
 bun run verify
+bun run test:dashboard
 bun run test:docker
 bun run test:examples:docker
 ```
 
-`verify` covers types, lint, unit tests, runner consumers, builds, and isolated packed-package consumers. The Docker commands exercise every built-in adapter, both real PostgreSQL/RabbitMQ examples, and mixed shared and file-dedicated resources under Vitest and Jest.
+`verify` covers types, lint, unit tests, runner consumers, dashboard runner and browser fixtures, builds, and isolated packed-package consumers. The Docker commands exercise every built-in adapter, both real PostgreSQL/RabbitMQ examples, and mixed shared and file-dedicated resources under Vitest and Jest.
 
 See [`runner-tests/README.md`](./runner-tests/README.md) for a directory-by-directory map of the fast runner contracts, real Docker isolation matrix, and failure-path fixtures.
 

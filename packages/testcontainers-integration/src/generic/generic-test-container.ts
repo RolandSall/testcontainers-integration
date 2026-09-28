@@ -43,6 +43,18 @@ export class GenericTestContainer<
     this.kind = options.kind;
   }
 
+  runtimeMetadata() {
+    const started = this.started;
+    if (started === undefined) return undefined;
+    return {
+      id: started.getId(),
+      image: this.options.image,
+      mappedPorts: Object.fromEntries(
+        (this.options.exposedPorts ?? []).map((port) => [String(port), started.getMappedPort(port)]),
+      ),
+    };
+  }
+
   start(options: ContainerStartOptions = {}): Promise<TResource> {
     if (this.stopped) return Promise.reject(new Error(`${this.kind} container has already been stopped`));
     this.startPromise ??= this.startOnce(options);

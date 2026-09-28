@@ -4,6 +4,7 @@ import { ContainerResources } from './container-resources.js';
 import { ContainerRuntime } from './container-runtime.js';
 import type { ContainerRuntimeOptions } from './container-runtime-options.js';
 import type { RequiredContainerInstance } from './required-container.js';
+import { dashboardErrorMessage } from './dashboard/dashboard-event.js';
 
 /** Prepares one file's combined shared and dedicated resources. */
 export type PrepareFileContainerResources = (
@@ -42,7 +43,36 @@ export class ContainerFileContext {
       const dedicatedResources = await this.runtime.startInstances(dedicated);
       const resources = ContainerResources.merge(shared, dedicatedResources);
       this.resources = resources;
-      this.preparationCleanup = await prepareResources?.(resources);
+      if (prepareResources !== undefined) {
+        const startedAt = Date.now();
+        this.options.eventSink?.emit({
+          type: 'resources.preparing', status: 'starting', scope: 'file',
+          message: 'preparing file container resources',
+          ...(this.options.eventContext?.filePath === undefined
+            ? {}
+            : { filePath: this.options.eventContext.filePath }),
+        });
+        try {
+          this.preparationCleanup = await prepareResources(resources);
+          this.options.eventSink?.emit({
+            type: 'resources.ready', status: 'ready', scope: 'file',
+            message: 'file container resources prepared', durationMs: Date.now() - startedAt,
+            ...(this.options.eventContext?.filePath === undefined
+              ? {}
+              : { filePath: this.options.eventContext.filePath }),
+          });
+        } catch (error) {
+          this.options.eventSink?.emit({
+            type: 'resources.failed', status: 'failed', scope: 'file',
+            message: 'file container resource preparation failed',
+            durationMs: Date.now() - startedAt, error: dashboardErrorMessage(error),
+            ...(this.options.eventContext?.filePath === undefined
+              ? {}
+              : { filePath: this.options.eventContext.filePath }),
+          });
+          throw error;
+        }
+      }
       return resources;
     } catch (error) {
       const cleanupFailures: unknown[] = [];

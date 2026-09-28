@@ -28,6 +28,16 @@ export class PostgreSqlTestContainer implements TestContainer<PostgreSqlResource
 
   constructor(private readonly options: PostgreSqlTestContainerOptions = {}) {}
 
+  runtimeMetadata() {
+    const started = this.started;
+    if (started === undefined) return undefined;
+    return {
+      id: started.getId(),
+      image: this.options.image ?? DEFAULT_IMAGE,
+      mappedPorts: { '5432': started.getPort() },
+    };
+  }
+
   start(options: ContainerStartOptions = {}): Promise<PostgreSqlResource> {
     if (this.stopped) {
       return Promise.reject(new Error('PostgreSQL container has already been stopped'));

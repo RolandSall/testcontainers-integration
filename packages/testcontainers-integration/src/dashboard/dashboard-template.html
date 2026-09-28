@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>__INTEGRATION_DASHBOARD_TITLE__</title>
+  <style>__INTEGRATION_DASHBOARD_STYLES__</style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <span class="eyebrow">INTEGRATION TESTS</span>
+        <h1>__INTEGRATION_DASHBOARD_TITLE__</h1>
+      </div>
+      <div class="header-actions">
+        <label class="run-picker">
+          Run
+          <select id="run-selector" aria-label="Dashboard run"></select>
+        </label>
+        <span id="connection" class="pill">Saved report</span>
+      </div>
+    </header>
+
+    <section id="summary" class="summary" aria-label="Run summary"></section>
+
+    <nav class="tabs" role="tablist" aria-label="Dashboard views">
+      <button id="containers-tab" type="button" role="tab" aria-selected="true" aria-controls="containers-view" data-tab="containers">Containers</button>
+      <button id="tests-tab" type="button" role="tab" aria-selected="false" aria-controls="tests-view" data-tab="tests">Tests</button>
+      <button id="lifecycle-tab" type="button" role="tab" aria-selected="false" aria-controls="lifecycle-view" data-tab="lifecycle">Lifecycle</button>
+    </nav>
+
+    <section id="containers-view" class="tab-view active" role="tabpanel" aria-labelledby="containers-tab" data-view="containers">
+      <article class="panel">
+        <div class="section-heading">
+          <div>
+            <h2>Containers</h2>
+            <p>Select a container to see its runtime facts and the test files whose declarations selected it.</p>
+          </div>
+        </div>
+        <div id="containers" class="container-list"></div>
+      </article>
+    </section>
+
+    <section id="tests-view" class="tab-view" role="tabpanel" aria-labelledby="tests-tab" data-view="tests" hidden>
+      <div class="grid">
+        <article class="panel span-2">
+          <div class="panel-heading">
+            <div>
+              <h2>Tests</h2>
+              <p>Runner-reported test-case duration. Container startup and application bootstrap are measured separately.</p>
+            </div>
+          </div>
+          <div id="test-average" class="average-card"></div>
+          <div id="tests"></div>
+        </article>
+        <article class="panel span-2">
+          <h2>Slowest tests</h2>
+          <div id="slow-tests"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="lifecycle-view" class="tab-view" role="tabpanel" aria-labelledby="lifecycle-tab" data-view="lifecycle" hidden>
+      <div class="grid">
+        <article class="panel span-2">
+          <div class="section-heading">
+            <div>
+              <h2>Lifecycle timeline</h2>
+              <p>Container bars show startup, application bars show bootstrap, and test-file bars show complete file execution.</p>
+            </div>
+            <div class="legend">
+              <span class="legend-container">Container startup</span>
+              <span class="legend-application">Application bootstrap</span>
+              <span class="legend-file">Test file</span>
+            </div>
+          </div>
+          <div id="timeline"></div>
+        </article>
+        <article class="panel span-2">
+          <h2>Lifecycle log</h2>
+          <div id="logs" class="logs"></div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script>window.__INTEGRATION_DASHBOARD__=__INTEGRATION_DASHBOARD_STATE__;</script>
+  <script>__INTEGRATION_DASHBOARD_SCRIPT__</script>
+</body>
+</html>

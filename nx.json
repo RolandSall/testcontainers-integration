@@ -3,16 +3,25 @@
   "targetDefaults": {
     "build": {
       "cache": true,
-      "dependsOn": ["^build"],
-      "outputs": ["{projectRoot}/dist"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "{projectRoot}/dist"
+      ]
     },
     "typecheck": {
       "cache": true,
-      "dependsOn": ["^build"]
+      "dependsOn": [
+        "^build"
+      ]
     },
     "test": {
       "cache": true,
-      "dependsOn": ["^build"]
+      "dependsOn": [
+        "^build"
+      ]
     }
-  }
+  },
+  "analytics": false
 }

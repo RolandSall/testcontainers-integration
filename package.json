@@ -1,6 +1,6 @@
 {
   "name": "testcontainers-integration-workspace",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.5",
@@ -18,12 +18,13 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p runner-tests/file-isolation/tsconfig.vitest.json && tsc --noEmit -p runner-tests/file-isolation/tsconfig.jest.json && nx run-many -t typecheck",
     "test": "nx run-many -t test",
     "test:runners": "bun run build && tsc --noEmit -p runner-tests/jest/tsconfig.jest.json && tsc --noEmit -p runner-tests/vitest/tsconfig.json && jest --config runner-tests/jest/jest.config.ts --runInBand && vitest run --config runner-tests/vitest/vitest.config.ts",
+    "test:dashboard": "bun run build && tsc --noEmit -p runner-tests/dashboard/tsconfig.json && bun scripts/verify-dashboard-runners.ts && bun test runner-tests/dashboard/dashboard.browser.test.ts",
     "test:docker": "nx run testcontainers-integration:test-docker",
     "test:examples:docker": "bun run build && bun --cwd examples/vitest-project integration && bun --cwd examples/jest-project integration && bun --cwd examples/vitest-annotation integration && bun --cwd examples/jest-annotation integration && bun scripts/verify-file-isolation.ts",
     "test:file-isolation:docker": "bun run build && bun scripts/verify-file-isolation.ts",
     "test:termination-cleanup:docker": "bun run build && node --test runner-tests/file-isolation/termination/forced-termination.verifier.test.ts",
     "lint": "eslint packages examples runner-tests scripts --max-warnings=0",
-    "verify": "bun run audit && bun run typecheck && bun run lint && bun run test && bun run test:runners && bun run build && bun run pack:check",
+    "verify": "bun run audit && bun run typecheck && bun run lint && bun run test && bun run test:runners && bun run test:dashboard && bun run build && bun run pack:check",
     "pack:check": "bun scripts/verify-packages.ts",
     "release:check": "bun scripts/verify-release.ts"
   },

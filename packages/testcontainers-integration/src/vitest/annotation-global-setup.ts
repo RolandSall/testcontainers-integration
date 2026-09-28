@@ -27,6 +27,7 @@ export const setup = async (project: ConfiguredVitestProject): Promise<void> => 
     ...(annotationProject.containerLogs === undefined
       ? {}
       : { containerLogs: annotationProject.containerLogs }),
+    ...(annotationProject.dashboard === undefined ? {} : { dashboard: annotationProject.dashboard }),
   });
   await lifecycle.setup(project);
 };

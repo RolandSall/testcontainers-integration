@@ -15,6 +15,10 @@ import {
   requiredContainersFor,
 } from '../required-container.js';
 import { JEST_CONTAINER_RESOURCES_PATH_ENV } from './context-key.js';
+import { dashboardEventSinkFor, flushDashboardEvents } from '../dashboard/dashboard-context.js';
+import { DashboardIntegrationTestLogger } from '../dashboard/dashboard-logger.js';
+import { consoleIntegrationTestLogger } from '../logging/console-integration-test-logger.js';
+import { dashboardErrorMessage } from '../dashboard/dashboard-event.js';
 
 export interface JestContainerFileSupportOptions {
   readonly registry?: ContainerRegistry;
@@ -25,6 +29,7 @@ const controller = new IntegrationTestFileController();
 let configuredRegistry: ContainerRegistry | undefined;
 let prepareResources: PrepareFileContainerResources | undefined;
 let hooksInstalled = false;
+let activeFilePath: string | undefined;
 
 /** Configures advanced file-owned containers, including custom container registries. */
 export const configureJestContainerFileSupport = (
@@ -40,6 +45,14 @@ export const installJestContainerFileSupport = (): void => {
   hooksInstalled = true;
   const hooks = jestHooks();
   hooks.beforeAll(async () => {
+    activeFilePath = currentJestTestPath();
+    const eventSink = dashboardEventSinkFor(activeFilePath);
+    const startedAt = Date.now();
+    eventSink?.emit({
+      type: 'file.lifecycle-starting', status: 'starting', scope: 'file',
+      message: 'starting test file lifecycle',
+      ...(activeFilePath === undefined ? {} : { filePath: activeFilePath }),
+    });
     const projectValue = (globalThis as Record<string, unknown>)[CONTAINER_PROJECT_CONTEXT_KEY];
     const project = projectValue === undefined ? undefined : parseContainerProject(projectValue);
     const requiredClass = consumeRequiredContainerClass();
@@ -54,9 +67,19 @@ export const installJestContainerFileSupport = (): void => {
     const declarations = project === undefined
       ? requiredClass === undefined ? [] : requiredContainersFor(requiredClass)
       : project.containers;
+    for (const declaration of declarations) {
+      eventSink?.emit({
+        type: 'file.container-declared', status: 'ready', scope: 'file',
+        message: `${declaration.name} declared for test file`,
+        ...(activeFilePath === undefined ? {} : { filePath: activeFilePath }),
+        containerName: declaration.name, containerKind: declaration.kind,
+        isolation: declaration.isolation,
+      });
+    }
     const environment = project?.environment ?? annotation?.environment;
-    await controller.start({
-      declarations,
+    try {
+      await controller.start({
+        declarations,
       sharedResources: readSharedResources(),
       registry: project === undefined
         ? configuredRegistry ?? createDefaultContainerRegistry()
@@ -65,16 +88,66 @@ export const installJestContainerFileSupport = (): void => {
         ...((project?.containerLogs ?? annotation?.containerLogs) === true
           ? { containerLogs: true }
           : {}),
+        ...(eventSink === undefined ? {} : {
+          eventSink,
+          eventContext: {
+            isolation: 'dedicated',
+            ...(activeFilePath === undefined ? {} : { filePath: activeFilePath }),
+          },
+          logger: new DashboardIntegrationTestLogger(
+            consoleIntegrationTestLogger,
+            eventSink,
+            activeFilePath,
+          ),
+        }),
       },
       ...(environment === undefined ? {} : { environment }),
       ...(applicationClass === undefined ? {} : { applicationTestClass: applicationClass }),
       startApplication: project === undefined
         ? applicationClass !== undefined
         : controller.applicationIsConfigured(),
-      ...(prepareResources === undefined ? {} : { prepareResources }),
-    });
+        ...(prepareResources === undefined ? {} : { prepareResources }),
+      });
+      eventSink?.emit({
+        type: 'file.lifecycle-ready', status: 'ready', scope: 'file',
+        message: 'test file lifecycle is ready',
+        ...(activeFilePath === undefined ? {} : { filePath: activeFilePath }),
+        durationMs: Date.now() - startedAt,
+      });
+    } catch (error) {
+      eventSink?.emit({
+        type: 'file.lifecycle-failed', status: 'failed', scope: 'file',
+        message: 'test file lifecycle failed to start',
+        ...(activeFilePath === undefined ? {} : { filePath: activeFilePath }),
+        durationMs: Date.now() - startedAt, error: dashboardErrorMessage(error),
+      });
+      await flushDashboardEvents();
+      throw error;
+    }
   });
-  hooks.afterAll(async () => controller.stop());
+  hooks.afterAll(async () => {
+    const eventSink = dashboardEventSinkFor(activeFilePath);
+    const startedAt = Date.now();
+    try {
+      await controller.stop();
+      eventSink?.emit({
+        type: 'file.lifecycle-stopped', status: 'stopped', scope: 'file',
+        message: 'test file lifecycle stopped',
+        ...(activeFilePath === undefined ? {} : { filePath: activeFilePath }),
+        durationMs: Date.now() - startedAt,
+      });
+    } catch (error) {
+      eventSink?.emit({
+        type: 'file.lifecycle-stop-failed', status: 'failed', scope: 'file',
+        message: 'test file lifecycle failed to stop',
+        ...(activeFilePath === undefined ? {} : { filePath: activeFilePath }),
+        durationMs: Date.now() - startedAt, error: dashboardErrorMessage(error),
+      });
+      throw error;
+    } finally {
+      await flushDashboardEvents();
+    }
+  });
 };
 
 export const configureJestApplication = <TApplication>(
@@ -110,4 +183,11 @@ const jestHooks = (): JestHooks => {
     beforeAll: candidate.beforeAll.bind(candidate),
     afterAll: candidate.afterAll.bind(candidate),
   };
+};
+
+const currentJestTestPath = (): string | undefined => {
+  const candidate = globalThis as typeof globalThis & {
+    expect?: { getState?: () => { testPath?: string } };
+  };
+  return candidate.expect?.getState?.().testPath;
 };

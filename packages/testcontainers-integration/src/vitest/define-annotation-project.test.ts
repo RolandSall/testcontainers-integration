@@ -26,6 +26,8 @@ test('given annotation options, when a Vitest project is defined, then scanner l
     testFileSuffix: '.container.integration.test.ts',
     containerLogs: true,
   });
+  expect(config.test?.reporters).toBeUndefined();
+  expect(config.test?.provide?.[ANNOTATION_PROJECT_CONTEXT_KEY]).not.toHaveProperty('dashboard');
 });
 
 test('annotation projects preserve the configured Vitest worker count', () => {

@@ -22,6 +22,16 @@ export class RabbitMqTestContainer implements TestContainer<RabbitMqResource> {
 
   constructor(private readonly options: RabbitMqTestContainerOptions = {}) {}
 
+  runtimeMetadata() {
+    const started = this.started;
+    if (started === undefined) return undefined;
+    return {
+      id: started.getId(),
+      image: this.options.image ?? DEFAULT_IMAGE,
+      mappedPorts: { '5672': started.getMappedPort(5672) },
+    };
+  }
+
   start(options: ContainerStartOptions = {}): Promise<RabbitMqResource> {
     if (this.stopped) return Promise.reject(new Error('RabbitMQ container has already been stopped'));
     this.startPromise ??= this.startOnce(options);

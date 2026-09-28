@@ -28,5 +28,6 @@ export const createConfiguredJestAnnotationLifecycle = (
     ...(annotationProject.containerLogs === undefined
       ? {}
       : { containerLogs: annotationProject.containerLogs }),
+    ...(annotationProject.dashboard === undefined ? {} : { dashboard: annotationProject.dashboard }),
   });
 };

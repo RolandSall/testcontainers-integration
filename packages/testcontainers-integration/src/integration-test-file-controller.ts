@@ -14,6 +14,7 @@ import { ApplicationIntegrationTestContextManager } from './environment/applicat
 import type { ApplicationIntegrationTestContextAccessor } from './environment/application-integration-test-context-accessor.js';
 import type { ApplicationLifecycle } from './environment/application-lifecycle.js';
 import type { RequiredContainerInstance } from './required-container.js';
+import { dashboardErrorMessage } from './dashboard/dashboard-event.js';
 
 /** Inputs resolved by a runner immediately before one test file executes. */
 export interface IntegrationTestFileStartOptions {
@@ -33,6 +34,8 @@ export class IntegrationTestFileController {
   private applicationManager: ApplicationIntegrationTestContextManager<unknown> | undefined;
   private applicationLifecycle: ApplicationLifecycle<unknown> | undefined;
   private restoreEnvironment: (() => void) | undefined;
+  private eventSink: ContainerRuntimeOptions['eventSink'];
+  private filePath: string | undefined;
 
   configureApplication<TApplication>(
     lifecycle: ApplicationLifecycle<TApplication>,
@@ -56,6 +59,8 @@ export class IntegrationTestFileController {
     }
     const fileContext = new ContainerFileContext(options.registry, options.runtimeOptions);
     this.fileContext = fileContext;
+    this.eventSink = options.runtimeOptions?.eventSink;
+    this.filePath = options.runtimeOptions?.eventContext?.filePath;
     try {
       const resources = await fileContext.start(
         options.declarations,
@@ -74,10 +79,28 @@ export class IntegrationTestFileController {
       );
       const manager = new ApplicationIntegrationTestContextManager(lifecycle);
       this.applicationManager = manager;
-      if (options.applicationTestClass === undefined) {
-        await manager.startForInstances(options.declarations, resources);
-      } else {
-        await manager.start(options.applicationTestClass, resources);
+      const startedAt = Date.now();
+      this.emit({
+        type: 'application.starting', status: 'starting', scope: 'application',
+        message: 'starting application under test',
+      });
+      try {
+        if (options.applicationTestClass === undefined) {
+          await manager.startForInstances(options.declarations, resources);
+        } else {
+          await manager.start(options.applicationTestClass, resources);
+        }
+        this.emit({
+          type: 'application.ready', status: 'ready', scope: 'application',
+          message: 'application under test is ready', durationMs: Date.now() - startedAt,
+        });
+      } catch (error) {
+        this.emit({
+          type: 'application.failed', status: 'failed', scope: 'application',
+          message: 'application under test failed to start',
+          durationMs: Date.now() - startedAt, error: dashboardErrorMessage(error),
+        });
+        throw error;
       }
     } catch (error) {
       const cleanupFailures: unknown[] = [];
@@ -117,9 +140,23 @@ export class IntegrationTestFileController {
     const manager = this.applicationManager;
     this.applicationManager = undefined;
     if (manager !== undefined) {
+      const startedAt = Date.now();
+      this.emit({
+        type: 'application.stopping', status: 'stopping', scope: 'application',
+        message: 'stopping application under test',
+      });
       try {
         await manager.stop();
+        this.emit({
+          type: 'application.stopped', status: 'stopped', scope: 'application',
+          message: 'application under test stopped', durationMs: Date.now() - startedAt,
+        });
       } catch (error) {
+        this.emit({
+          type: 'application.stop-failed', status: 'failed', scope: 'application',
+          message: 'application under test failed to stop',
+          durationMs: Date.now() - startedAt, error: dashboardErrorMessage(error),
+        });
         failures.push(error);
       }
     }
@@ -141,5 +178,12 @@ export class IntegrationTestFileController {
     if (failures.length > 0) {
       throw new AggregateError(failures, 'Integration-test file cleanup failed');
     }
+  }
+
+  private emit(event: Parameters<NonNullable<ContainerRuntimeOptions['eventSink']>['emit']>[0]): void {
+    this.eventSink?.emit({
+      ...event,
+      ...(this.filePath === undefined ? {} : { filePath: this.filePath }),
+    });
   }
 }

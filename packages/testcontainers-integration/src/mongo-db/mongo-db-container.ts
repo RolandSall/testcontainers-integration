@@ -24,6 +24,16 @@ export class MongoDbTestContainer implements TestContainer<MongoDbResource> {
 
   constructor(private readonly options: MongoDbTestContainerOptions = {}) {}
 
+  runtimeMetadata() {
+    const started = this.started;
+    if (started === undefined) return undefined;
+    return {
+      id: started.getId(),
+      image: this.options.image ?? DEFAULT_IMAGE,
+      mappedPorts: { '27017': started.getMappedPort(27017) },
+    };
+  }
+
   start(options: ContainerStartOptions = {}): Promise<MongoDbResource> {
     if (this.stopped) return Promise.reject(new Error('MongoDB container has already been stopped'));
     this.startPromise ??= this.startOnce(options);
