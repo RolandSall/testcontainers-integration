@@ -97,21 +97,14 @@ void test('live and saved dashboards render updates, charts, failures, filtering
     session.emit({ type: 'file.finished', status: 'failed', filePath, timestamp: now + 200 });
     session.emit({ type: 'run.finished', status: 'failed', runner: 'vitest', timestamp: now + 210 });
 
-    await devtools.waitFor("document.querySelector('#containers')?.innerText.includes('parallel.dashboard.test.ts')");
+    await devtools.waitFor("document.querySelector('#containers')?.innerText.includes('5432 → 54321')");
     assert.equal(await devtools.evaluate<string>("document.querySelector('[data-tab][aria-selected=true]').textContent"), 'Containers');
-    assert.match(await devtools.evaluate<string>("document.querySelector('#containers').innerText"), /selected by these test files/i);
-    assert.doesNotMatch(await devtools.evaluate<string>("document.querySelector('#containers').innerText"), /available/i);
-    assert.match(await devtools.evaluate<string>("document.querySelector('#containers').innerText"), /5432 → 54321/);
+    const containersText = await devtools.evaluate<string>("document.querySelector('#containers').innerText");
+    assert.match(containersText, /5432 → 54321/);
+    assert.doesNotMatch(containersText, /selected by these test files/i);
+    assert.doesNotMatch(containersText, /parallel\.dashboard\.test\.ts/i);
     const databaseCard = '.container-card[data-container-key^="database|"]';
     await devtools.evaluate(`document.querySelector('${databaseCard}').open=true`);
-    assert.equal(await devtools.evaluate<boolean>(`document.querySelector('${databaseCard} .relation-file').open`), false);
-    assert.match(await devtools.evaluate<string>(`document.querySelector('${databaseCard} .relation-file > summary').innerText`), /7 tests · 1 passed · 1 failed · 5 skipped/i);
-    await devtools.evaluate(`document.querySelector('${databaseCard} .relation-file > summary').click()`);
-    assert.equal(await devtools.evaluate<number>(`document.querySelectorAll('${databaseCard} .relation-test').length`), 5);
-    assert.equal(await devtools.evaluate<string>(`document.querySelector('${databaseCard} .relation-pagination span').innerText`), 'Page 1 of 2');
-    await devtools.evaluate(`document.querySelector('${databaseCard} [data-relation-page="2"]').click()`);
-    assert.equal(await devtools.evaluate<number>(`document.querySelectorAll('${databaseCard} .relation-test').length`), 2);
-    assert.equal(await devtools.evaluate<string>(`document.querySelector('${databaseCard} .relation-pagination span').innerText`), 'Page 2 of 2');
     assert.match(await devtools.evaluate<string>(`document.querySelector('${databaseCard} .container-logs').innerText`), /Show logs \(1\)/);
     await devtools.evaluate(`document.querySelector('${databaseCard} .container-logs').open=true`);
     assert.match(await devtools.evaluate<string>(`document.querySelector('${databaseCard} .container-log-output').innerText`), /database system is ready/);
