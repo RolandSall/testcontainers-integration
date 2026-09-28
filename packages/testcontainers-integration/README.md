@@ -190,7 +190,7 @@ export default defineContainerProject({
 ### Use the dashboard during development and CI
 
 1. Open the printed local URL while the tests are running.
-2. Use **Containers** to see which files selected each shared or dedicated container, its mapped ports, startup status, and optional logs.
+2. Use **Containers** to inspect each shared or dedicated container's kind, isolation, image, mapped ports, startup status and duration, failures, and optional logs.
 3. Use **Tests** to search, filter, sort, paginate, and compare individual runner-reported test durations with the run average.
 4. Use **Lifecycle** to separate container startup, application bootstrap, and complete test-file execution. A **Test file execution** bar represents the whole file, not one individual test.
 5. In CI, upload the configured output directory as an artifact. The collector still uses loopback communication, but it never attempts to open a browser when `CI` is set.
@@ -215,7 +215,7 @@ jest --config jest.integration.config.ts -t "creates an order"
 
 The same applies to WebStorm's file, suite, and individual-test actions when their run configuration uses that Jest or Vitest config file. If WebStorm launches a generic runner configuration that bypasses the integration config, neither the container lifecycle nor the dashboard is registered. Shared containers required by the selected project are started during global setup; file-dedicated containers are started only for test files that actually execute.
 
-The dashboard shows run and test status, file and test-case timings, application-bootstrap and container-startup durations, shared or file-dedicated container ownership, mapped ports, execution timelines, slow tests, lifecycle logs, and peak observed file parallelism. Its summary cards are interactive: test-status cards filter the Tests table, while Containers and Peak files open their corresponding views. The Tests tab keeps test-name, file-name, and available-status filters in their respective column headers. It also provides sortable columns and client-side pagination with 5, 10, or 15 rows per page. A prominent card shows the average across completed tests that reported timing data; each timed row uses a red upward or green downward delta to show its difference from that average. A container lists the files whose declaration selected it. Each file is collapsed by default and paginates its reported tests without claiming that every test accessed the container.
+The dashboard shows run and test status, file and test-case timings, application-bootstrap and container-startup durations, shared or file-dedicated container ownership, mapped ports, execution timelines, slow tests, lifecycle logs, and peak observed file parallelism. Its summary cards are interactive: test-status cards filter the Tests table, while Containers and Peak files open their corresponding views. The Tests tab keeps test-name, file-name, and available-status filters in their respective column headers. It also provides sortable columns and client-side pagination with 5, 10, or 15 rows per page. A prominent card shows the average across completed tests that reported timing data; each timed row uses a red upward or green downward delta to show its difference from that average. The Containers tab intentionally reports infrastructure facts without claiming that a particular file or test accessed a container.
 
 The timing categories are intentionally separate:
 
