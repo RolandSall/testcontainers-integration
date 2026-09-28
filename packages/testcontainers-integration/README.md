@@ -203,6 +203,8 @@ The dashboard opens in a normal browser, not inside the WebStorm test-results pa
 
 You do not need to run the complete suite. The dashboard records exactly the files and test cases selected by Jest or Vitest, provided the run uses the integration-test configuration containing `defineContainerProject` or `defineAnnotationProject`:
 
+It does not aggregate tests from separate unit-test or other runner configurations. Those tests continue to run normally, but they do not appear in this integration-test dashboard.
+
 ```sh
 # Vitest: one file or one matching test name
 vitest run --config vitest.integration.config.ts test/orders.integration.test.ts
