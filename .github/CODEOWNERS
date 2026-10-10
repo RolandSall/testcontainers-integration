@@ -1,0 +1,5 @@
+# Every change is owned by Roland Salloum.
+* @RolandSall
+
+# Protect repository governance files as well.
+/.github/ @RolandSall
