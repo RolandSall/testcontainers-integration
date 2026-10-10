@@ -27,8 +27,9 @@ const startApplication = (
   databaseUrl: string,
   brokerUrl: string,
 ): Promise<AcceptanceApplication> => {
-  void databaseUrl;
-  void brokerUrl;
+  if (databaseUrl.length === 0 || brokerUrl.length === 0) {
+    throw new Error('The acceptance application requires database and broker URLs.');
+  }
   return Promise.resolve({
     baseUrl: 'http://127.0.0.1:3000',
     close: () => Promise.resolve(),
